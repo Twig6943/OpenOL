@@ -1026,6 +1026,10 @@ INT WINAPI WinMain( HINSTANCE hInInstance, HINSTANCE hPrevInstance, char*, INT n
 	CmdLine = ShowLaunchModeDialog( CmdLine );
 	if( !CmdLine )
 		return 0;
+#elif !WITH_EDITOR
+	static TCHAR ShippingCmdLine[4096];
+	appSprintf( ShippingCmdLine, TEXT("%s -seekfreeloadingpcconsole -nosteam"), CmdLine );
+	CmdLine = ShippingCmdLine;
 #endif
 	
 #if !SHIPPING_PC_GAME && !CONSOLE
