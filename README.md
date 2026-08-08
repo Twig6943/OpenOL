@@ -37,6 +37,7 @@ The resulting `OLGame.exe`, along with `Core.upk`, `Engine.upk`, `OLGame.upk`, o
 - `ToggleAllowGhostDoors` toggles ability to do “ghost door” glitch (e.g. for speedruns)
 - `MaxFPS <Number>` alias for `Set Engine MaxSmoothedFramerate <Number>` command
 - `Unlit` / `Lit` / `ToggleUnlit` sets/toggles viewmode to Unlit or Lit
+- `SetGameSpeed <Number>` sets game speed
 
 ### Fixes and New Features:
 
