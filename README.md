@@ -1,4 +1,4 @@
-# OpenOL — Modded "Client" for Outlast Game
+# OpenOL — Modified client for Outlast Game
 
 <p align="center">
   <a href="./README.md">🇺🇸 English</a> /

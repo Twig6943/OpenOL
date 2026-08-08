@@ -1,4 +1,4 @@
-# OpenOL — модифицированный «клиент» для игры Outlast
+# OpenOL — модифицированный клиент для игры Outlast
 
 <p align="center">
   <a href="./README.md">🇺🇸 English</a> /
