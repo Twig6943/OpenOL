@@ -938,3 +938,8 @@ exec function KillAllEnemies()
         E.Destroy();
     }
 }
+
+exec function SetGameSpeed(float Speed)
+{
+    WorldInfo.Game.SetGameSpeed(Speed);
+}

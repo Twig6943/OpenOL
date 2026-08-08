@@ -631,7 +631,7 @@ void AOLPawn::CalcVelocity(FVector &AccelDir, FLOAT DeltaTime, FLOAT MaxSpeed, F
 	FVector CapturedRMDelta = FVector::ZeroVector;
 	const UBOOL bApplyRootMotion = (Physics == PHYS_Custom && Mesh &&
 		Mesh->RootMotionMode == RMM_Accel &&
-		(Mesh->PreviousRMM != RMM_Ignore || (bIsDummyPawn && SpecialMove == SMT_EnterLadderFromAbove)) &&
+		(Mesh->PreviousRMM != RMM_Ignore || (bIsDummyPawn && (SpecialMove == SMT_EnterLadderFromAbove || SpecialMove == SMT_CSA))) &&
 		Mesh->bProcessingRootMotion);
 	if (bApplyRootMotion)
 		CapturedRMDelta = Mesh->RootMotionDelta.GetTranslation();

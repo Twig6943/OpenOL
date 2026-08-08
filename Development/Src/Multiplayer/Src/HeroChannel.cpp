@@ -93,6 +93,14 @@ void BuildStatePacket(AOLHero* Hero, UBOOL bSendingJumpGroundZ, FLOAT JumpGround
     }
     N = PutU8(B, N, FootSurf);
 
+    // Struggle cycle anim play rate (0 when not in LM_Struggle)
+    {
+        AOLPlayerController* OLPC = Hero->OLPC;
+        FLOAT rate = (OLPC && Hero->LocomotionMode == LM_Struggle)
+            ? OLPC->Struggle.SmoothedAnimPlayRate : 0.f;
+        N = PutI16(B, N, (INT)(rate * 1000.f));
+    }
+
     // Nick tail: [nick_len(1)][nick ASCII, max 32]
     FString Nick = GMpConn.Username.Len() > 0 ? GMpConn.Username : FString(TEXT("Player"));
     if (Nick.Len() == 0) Nick = TEXT("Player");
@@ -159,6 +167,15 @@ UBOOL DecodeBinaryState(const BYTE* Data, INT DataLen, FHeroStatePacket& S)
     INT FootSurf = 0;
     Off = ReadU8(Data, Off, FootSurf);
     S.FootstepSurface = FootSurf;
+
+    // Struggle play rate
+    S.StrugglePlayRate = 0.f;
+    if (Off + 2 <= DataLen)
+    {
+        INT SR = 0;
+        Off = ReadI16(Data, Off, SR);
+        S.StrugglePlayRate = (FLOAT)SR / 1000.f;
+    }
 
     // Optional nick tail
     S.bHasNick = FALSE;
@@ -231,22 +248,18 @@ static void ApplyHeroState(AMultiplayerController* Controller, INT Idx, const FH
         return;
     }
 
-    const UBOOL bAlive = (S.Health > 0);
-
     if (!P->bHasReceivedData)
     {
         Dummy->SetLocation(S.Loc);
         Dummy->SetRotation(S.Rot);
+        // Unhide mesh on first LOC packet — SpawnDummy hides it until we have a valid position.
+        if (Dummy->Mesh)     Dummy->Mesh->SetHiddenGame(FALSE);
+        if (Dummy->HeadMesh) Dummy->HeadMesh->SetHiddenGame(FALSE);
     }
     P->bHasReceivedData = TRUE;
 
     Dummy->Health        = S.Health;
     Dummy->PreciseHealth = (FLOAT)S.Health;
-
-    if (Dummy->Mesh)
-        Dummy->Mesh->SetHiddenGame(!bAlive);
-    if (Dummy->HeadMesh)
-        Dummy->HeadMesh->SetHiddenGame(!bAlive);
 
     if (S.bCrouched != (UBOOL)P->bLastRemoteCrouched)
     {
@@ -268,8 +281,9 @@ static void ApplyHeroState(AMultiplayerController* Controller, INT Idx, const FH
     Dummy->SetDummyLedgeWalkDelta(S.LedgeWalkDelta);
     Dummy->SetDummySqueezeDelta(S.SqueezeDelta);
     Dummy->SetDummyHobblingState(S.bHobbling, S.HobblingIntensity, S.TargetHobblingIntensity);
-    Dummy->bLimping    = S.bLimping;
-    Dummy->CurrentLean = S.CurrentLean;
+    Dummy->bLimping              = S.bLimping;
+    Dummy->CurrentLean           = S.CurrentLean;
+    Dummy->DummyStrugglePlayRate = S.StrugglePlayRate;
 
     if ((S.LocomotionMode == LM_ContextualLean || Dummy->LocomotionMode == LM_ContextualLean) && Dummy->PeekingAnimNode)
     {
@@ -583,6 +597,17 @@ void UHeroChannel::ApplyLocomotionMode(INT Idx, AOLHero* Dummy, INT NewLocomotio
             Dummy->SetDummyLocomotionMode(LM_ContextualLean);
         }
         break;
+    case LM_Struggle:
+        Dummy->SetDummyLocomotionMode(LM_Struggle);
+        // If SMT packet already set the cycle anim name, start looping it now.
+        // If SMT packet arrives later, it will start the loop itself (see SMT_EnterStruggle case).
+        if (Dummy->DummyStruggleCycleAnimPlayer != NAME_None && Dummy->FullBodyAnimSlot)
+            Dummy->FullBodyAnimSlot->PlayCustomAnim(
+                Dummy->DummyStruggleCycleAnimPlayer,
+                Dummy->DummyStrugglePlayRate > 0.f ? Dummy->DummyStrugglePlayRate : 1.f,
+                0.1f, 0.0f, TRUE, FALSE);
+        break;
+
     default:
         Dummy->SetDummyLocomotionMode(LM_Walk);
         if (OldLM == LM_Pushing || OldLM == LM_Cinematic)
@@ -720,6 +745,8 @@ static void BuildAndSendSmtTransition(UHeroChannel* Ch, INT CurSMT)
     // Grab position / direction — always filled (receiver picks what applies per SMT).
     // JumpOverAndGrabLedge / ClimbUpLedge pass LastGrabTargetPos (the ledge/far-side point)
     // as the AdjustPosition target; all other SMTs use LastGrabPos (expectedAnimStart).
+    // For SMT_CSA, LastGrabPos/LastGrabDir are temporarily overridden by MpSendCSAActivation
+    // with the actual expectedAnimStart/expectedAnimFwd computed in TryCSA.
     const FVector& GrabPos =
         (CurSMT == SMT_JumpOverAndGrabLedge)
         ? Hero->LastGrabTargetPos
@@ -784,6 +811,33 @@ static void BuildAndSendSmtTransition(UHeroChannel* Ch, INT CurSMT)
             P.CSAPath[i] = (BYTE)((*PathStr)[i] & 0x7F);
     }
 
+    // Struggle params (SMT_EnterStruggle) — send entry + cycle anim names so dummy can play them
+    if (CurSMT == SMT_EnterStruggle && Hero->OLPC)
+    {
+        auto PackName = [](FName N, BYTE* LenOut, BYTE* Buf, INT MaxLen)
+        {
+            FString S = N.ToString();
+            INT Len = Min(S.Len(), MaxLen);
+            *LenOut = (BYTE)Len;
+            for (INT i = 0; i < Len; i++)
+                Buf[i] = (BYTE)((*S)[i] & 0x7F);
+        };
+        const FStruggleConfig& Cfg = Hero->OLPC->Struggle.Config;
+        PackName(Cfg.EntryAnimPlayer,  &P.StruggleEntryAnimPlayerLen, P.StruggleEntryAnimPlayer, 63);
+        PackName(Cfg.CycleAnimPlayer,  &P.StruggleCycleAnimPlayerLen, P.StruggleCycleAnimPlayer, 63);
+        PackName(Cfg.CycleAnimEnemy,   &P.StruggleCycleAnimEnemyLen,  P.StruggleCycleAnimEnemy,  63);
+
+        // Pack the first HeroAnimSet path so receiver can load it (mirrors Cinematic approach).
+        if (Cfg.HeroAnimSets.Num() > 0 && Cfg.HeroAnimSets(0))
+        {
+            FString SetPath = Cfg.HeroAnimSets(0)->GetPathName();
+            INT Len = Min(SetPath.Len(), 127);
+            P.StruggleAnimSetPathLen = (BYTE)Len;
+            for (INT i = 0; i < Len; i++)
+                P.StruggleAnimSetPath[i] = (BYTE)((*SetPath)[i] & 0x7F);
+        }
+    }
+
     // ContextualLean params (SMT_EnterContextualLean)
     if (CurSMT == SMT_EnterContextualLean)
     {
@@ -816,6 +870,33 @@ static void BuildAndSendSmtTransition(UHeroChannel* Ch, INT CurSMT)
     GMpConn.SendBinary(B, N);
 }
 
+void MpSendCSAActivation(AOLCSA* CSA, const FVector& AnimStart, const FVector& AnimFwd)
+{
+    UHeroChannel* Ch = GHeroChannelTicker.Channel;
+    if (!Ch || !CanSend() || !CSA) return;
+
+    FString CSAPath = CSA->GetPathName();
+    if (Ch->ControllerOwner->CSAActBlacklist.FindItemIndex(CSAPath) != INDEX_NONE)
+        return;
+
+    // Temporarily override LastGrabPos/LastGrabDir so BuildAndSendSmtTransition
+    // encodes the correct CSA animation start position and direction.
+    FVector SavedGrabPos = GMultiplayerHero->LastGrabPos;
+    FVector SavedGrabDir = GMultiplayerHero->LastGrabDir;
+    GMultiplayerHero->LastGrabPos = AnimStart;
+    GMultiplayerHero->LastGrabDir = AnimFwd;
+
+    AOLCSA* SavedCSA = GMultiplayerHero->ActiveCSA;
+    GMultiplayerHero->ActiveCSA = CSA;
+    BuildAndSendSmtTransition(Ch, SMT_CSA);
+    GMultiplayerHero->ActiveCSA = SavedCSA;
+
+    GMultiplayerHero->LastGrabPos = SavedGrabPos;
+    GMultiplayerHero->LastGrabDir = SavedGrabDir;
+
+    Ch->LastSentSpecialMove = SMT_CSA;
+}
+
 void UHeroChannel::SendSpecialMoveType()
 {
     if (!CanSend()) return;
@@ -831,19 +912,12 @@ void UHeroChannel::SendSpecialMoveType()
 
     // SMT_Crouch/Uncrouch are not sent as SMT_TYPE — the receiver's physWalking
     // triggers OnCrouch/OnUncrouch natively when bWantsToCrouch changes via MPKT_STATE.
+    // SMT_CSA is sent event-driven via MpSendCSAActivation (called from TryCSA) — not from the tick,
+    // because instant CSA clears ActiveCSA before the tick runs.
     if (CurSMT != LastSentSpecialMove
-        && CurSMT != SMT_None && CurSMT != SMT_Crouch && CurSMT != SMT_Uncrouch)
+        && CurSMT != SMT_None && CurSMT != SMT_Crouch && CurSMT != SMT_Uncrouch
+        && CurSMT != SMT_CSA)
     {
-        if (CurSMT == SMT_CSA && GMultiplayerHero->ActiveCSA)
-        {
-            FString CSAPath = GMultiplayerHero->ActiveCSA->GetPathName();
-            //debugf(TEXT("[MP] CSA: %s"), *CSAPath);
-            if (ControllerOwner->CSAActBlacklist.FindItemIndex(CSAPath) != INDEX_NONE)
-            {
-                LastSentSpecialMove = CurSMT;
-                return;
-            }
-        }
         BuildAndSendSmtTransition(this, CurSMT);
         if (CurSMT == SMT_PickupObject)
             SendPickupStart(CurSMT);
@@ -1078,11 +1152,10 @@ void UHeroChannel::OnBinaryPlayerEvent(INT SenderID, BYTE* Data, INT DataLen)
         }
         else if (!AnimStart.IsZero())
         {
-            FRotator VictimRot = Hero->Rotation;
-            VictimRot.Yaw = Pkt.VictimYaw;
-            Hero->SetRotation(VictimRot);
-            // CharDir must match victim's restored rotation so root motion plays in the correct direction.
-            Hero->StartSpecialMove(69, AnimStart, FRotationMatrix(VictimRot).GetAxis(0), 0);
+            // Use the current client rotation — after Grab the victim is already correctly
+            // oriented (we snapped to CharDir in PEVT_Grab). Restoring VictimYaw from the
+            // server packet would overwrite that with a stale value and cause a spin.
+            Hero->StartSpecialMove(69, AnimStart, Hero->Rotation.Vector(), 0);
         }
         else
         {
@@ -1326,6 +1399,11 @@ void UHeroChannel::OnBinaryCinematicAnim(INT SenderID, BYTE* Data, INT DataLen)
         }
     }
 
+    // Stop previous cinematic anim (fires looping sound stop-events like Wheelchair_LOOP_STOP)
+    // before starting the new one, so sounds from the outgoing anim are properly cleaned up.
+    if (Dummy->FullBodyAnimSlot && Dummy->FullBodyAnimSlot->bIsPlayingCustomAnim)
+        Dummy->ClearShadowIdleAnim();
+
     Dummy->PlayCinematicDummyAnim(AnimName, 1.f, 0.2f, 0.2f);
 }
 
@@ -1429,6 +1507,61 @@ void UHeroChannel::OnBinarySmtType(INT SenderID, BYTE* Data, INT DataLen)
         Dummy->SetDummyLocomotionMode(LM_Walk);
         break;
 
+    case SMT_EnterStruggle:
+    {
+        // Load the HeroAnimSet so struggle anims are available on dummy's mesh
+        // (mirrors Cinematic: LoadObject<UAnimSet> + UpdateAnimations).
+        if (Pkt.StruggleAnimSetPathLen > 0 && Dummy->Mesh)
+        {
+            TCHAR PathBuf[128] = {0};
+            for (INT i = 0; i < Pkt.StruggleAnimSetPathLen && i < 127; i++)
+                PathBuf[i] = (TCHAR)Pkt.StruggleAnimSetPath[i];
+            debugf(TEXT("[Struggle] AnimSetPath='%s'"), PathBuf);
+            UAnimSet* AnimSet = LoadObject<UAnimSet>(NULL, PathBuf, NULL, LOAD_None, NULL);
+            if (AnimSet)
+            {
+                debugf(TEXT("[Struggle] AnimSet loaded OK"));
+                if (Dummy->Mesh->AnimSets.FindItemIndex(AnimSet) == INDEX_NONE)
+                    Dummy->Mesh->AnimSets.AddItem(AnimSet);
+                Dummy->Mesh->UpdateAnimations();
+            }
+            else
+            {
+                debugf(TEXT("[Struggle] AnimSet FAILED to load"));
+            }
+        }
+        else
+        {
+            debugf(TEXT("[Struggle] AnimSetPathLen=%d, no AnimSet to load"), (INT)Pkt.StruggleAnimSetPathLen);
+        }
+
+        // Unpack anim names from the packet into dummy fields.
+        // OLAnimStruggleCycle::OnBecomeRelevant and StartSpecialMove case will read them.
+        auto UnpackName = [](const BYTE* Buf, BYTE Len) -> FName
+        {
+            TCHAR Tmp[64] = {0};
+            for (INT i = 0; i < Len && i < 63; i++)
+                Tmp[i] = (TCHAR)Buf[i];
+            return (Len > 0) ? FName(Tmp) : NAME_None;
+        };
+        Dummy->DummyStruggleEntryAnimPlayer = UnpackName(Pkt.StruggleEntryAnimPlayer, Pkt.StruggleEntryAnimPlayerLen);
+        Dummy->DummyStruggleCycleAnimPlayer = UnpackName(Pkt.StruggleCycleAnimPlayer, Pkt.StruggleCycleAnimPlayerLen);
+        Dummy->DummyStruggleCycleAnimEnemy  = UnpackName(Pkt.StruggleCycleAnimEnemy,  Pkt.StruggleCycleAnimEnemyLen);
+
+        // If LM_Struggle is already active (LOC arrived before SMT), start cycle loop now.
+        // Otherwise ApplyLocomotionMode will start it when LM_Struggle arrives.
+        if (Dummy->LocomotionMode == LM_Struggle
+            && Dummy->DummyStruggleCycleAnimPlayer != NAME_None
+            && Dummy->FullBodyAnimSlot)
+        {
+            Dummy->FullBodyAnimSlot->PlayCustomAnim(
+                Dummy->DummyStruggleCycleAnimPlayer,
+                Dummy->DummyStrugglePlayRate > 0.f ? Dummy->DummyStrugglePlayRate : 1.f,
+                0.1f, 0.0f, TRUE, FALSE);
+        }
+        break;
+    }
+
     case SMT_EnterLadderFromAbove:
         Dummy->SetDummyLocomotionMode(LM_Walk);
         break;
@@ -1508,46 +1641,28 @@ void UHeroChannel::OnBinarySmtType(INT SenderID, BYTE* Data, INT DataLen)
 
     case SMT_CSA:
     {
-        // When SyncMatinees is off: play the animation on the dummy but skip the
-        // Kismet event (ActiveCSA / ConsumeItem) so the local world is not affected.
+        // Resolve CSA actor by path. Only set ActiveCSA when SyncMatinees is on —
+        // FinishSpecialMove checks ActiveCSA != NULL before firing ObserverActivateCSA/ConsumeItem,
+        // so leaving it NULL is the correct way to skip the Kismet event when sync is off.
         if (GMpConn.SyncMatinees && Pkt.CSAPathLen > 0)
         {
             TCHAR PathBuf[128] = {0};
             for (INT i = 0; i < Pkt.CSAPathLen && i < 127; i++)
                 PathBuf[i] = (TCHAR)Pkt.CSAPath[i];
-            AOLCSA* CSA = Cast<AOLCSA>(UObject::StaticFindObject(
+            Dummy->ActiveCSA = Cast<AOLCSA>(UObject::StaticFindObject(
                 AOLCSA::StaticClass(), NULL, PathBuf, FALSE));
-            Dummy->ActiveCSA = CSA;
-
-            if (CSA)
-            {
-                AOLPlayerController* OLPC = Cast<AOLPlayerController>(Controller);
-                if (OLPC)
-                {
-                    // Consume the required item immediately (mirrors OLCSA::Completed)
-                    if (CSA->bConsumeItem && CSA->RequiredItem != NAME_None && OLPC->InventoryManager)
-                        OLPC->InventoryManager->ConsumeItem(CSA->RequiredItem);
-                }
-            }
         }
 
-        // Play anim — prop attachment notify fires automatically
-        if (Pkt.CSAAnimLen > 0 && Dummy->FullBodyAnimSlot)
-        {
-            TCHAR AnimBuf[32] = {0};
-            for (INT i = 0; i < Pkt.CSAAnimLen && i < 31; i++)
-                AnimBuf[i] = (TCHAR)Pkt.CSAAnimName[i];
-            FName AnimFName(AnimBuf);
-            Dummy->FullBodyAnimSlot->PlayCustomAnim(AnimFName, 1.f, 0.25f, 0.5f, FALSE, TRUE);
-            // Mirror PlayFullBodyAnim: register the name so NativeOnAnimEnd passes the filter,
-            // then enable the notify so bPlayingSpecialMoveAnim is cleared when the anim ends.
-            Dummy->PlayingSpecialMoveAnims.AddUniqueItem(AnimFName);
-            Dummy->FullBodyAnimSlot->SetActorAnimEndNotification(TRUE);
-        }
+        // Let StartSpecialMove drive the full lifecycle: plays anim (or not for instant CSA),
+        // then FinishSpecialMove fires naturally via NativeOnAnimEnd or immediately if no anim.
+        // GrabPos/GrabDir carry expectedAnimStart/expectedAnimFwd encoded by MpSendCSAActivation.
+        Dummy->StartSpecialMove(SMT_CSA, GrabPos, GrabDir, APTT_TargetAtStart);
 
-        // Set SpecialMove directly without StartSpecialMove to avoid AdjustPosition teleporting dummy.
-        Dummy->SpecialMove = SMT_CSA;
-        Dummy->bPlayingSpecialMoveAnim = (Pkt.CSAAnimLen > 0);
+        // Mirror TryCSA: for instant CSA (no anim) clear bPlayingSpecialMoveAnim so
+        // IsSpecialMoveCompleted() returns TRUE immediately and FinishSpecialMove fires next tick.
+        if (Pkt.CSAAnimLen == 0)
+            Dummy->bPlayingSpecialMoveAnim = FALSE;
+
         return;
     }
 
@@ -1579,6 +1694,10 @@ void UHeroChannel::OnBinarySmtType(INT SenderID, BYTE* Data, INT DataLen)
         Dummy->SetRotation(GrabDir.Rotation());
 
     const FVector StartPos = SMP.AdjustPosition ? GrabPos : FVector(0,0,0);
+    if (SMT == SMT_EnterStruggle)
+        debugf(TEXT("[DummyStruggle] Before StartSM: Entry='%s' Cycle='%s'"),
+            *Dummy->DummyStruggleEntryAnimPlayer.ToString(),
+            *Dummy->DummyStruggleCycleAnimPlayer.ToString());
     Dummy->StartSpecialMove((ESpecialMoveType)SMT, StartPos, GrabDir);
     P->DummySMTLockUntil = 0.f;
 }
@@ -1730,7 +1849,7 @@ void FHeroChannelReceiveTicker::Tick(FLOAT DeltaTime)
         if (!Dummy) continue;
 
         // Don't fight root motion: skip VInterpTo entirely when dummy mesh is in RMM_Accel.
-        const INT SMT = (INT)Dummy->SpecialMove;
+        // AdjustPosition velocity correction runs via UpdateSpecialMove (see TickPrePhysics).
         if (Dummy->Mesh && Dummy->Mesh->RootMotionMode == RMM_Accel)
             continue;
 
@@ -1761,9 +1880,22 @@ void FHeroChannelReceiveTicker::Tick(FLOAT DeltaTime)
             Dummy->SetLocation(SmoothedLoc);
         }
 
-        DT = DeltaTime;
-        FRotator SmoothedRot = RInterpTo(Dummy->Rotation, P->LastReceivedRot, DT, InterpSpeed);
-        Dummy->SetRotation(SmoothedRot);
+        // Skip rotation interpolation while a deferred SMT is waiting to fire — the rotation
+        // is pre-set to GrabDir just before StartSpecialMove and must not be overwritten by LOC.
+        // Also skip when an SMT is active but RMM_Accel hasn't kicked in yet (first tick after
+        // StartSpecialMove) to avoid RInterpTo wrapping through 360° on large yaw deltas.
+        const UBOOL bSMTActive = (Dummy->SpecialMove != SMT_None);
+        if (P->PendingSMT == SMT_None && !bSMTActive)
+        {
+            DT = DeltaTime;
+            FRotator SmoothedRot = RInterpTo(Dummy->Rotation, P->LastReceivedRot, DT, InterpSpeed);
+            Dummy->SetRotation(SmoothedRot);
+        }
+        else if (P->PendingSMT != SMT_None && !P->PendingSMTGrabDir.IsZero())
+        {
+            // Hold at the expected grab direction while waiting for proximity trigger.
+            Dummy->SetRotation(P->PendingSMTGrabDir.Rotation());
+        }
 
         // Enforce zero collision every tick.
         Dummy->SetCollision(FALSE, FALSE, FALSE);

@@ -531,7 +531,9 @@ void AMultiplayerController::OnToggleCinematicMode(USeqAct_ToggleCinematicMode* 
     if      (Action->InputLinks(0).bHasImpulse) bNewCinematicMode = TRUE;
     else if (Action->InputLinks(1).bHasImpulse) bNewCinematicMode = FALSE;
     else                                         bNewCinematicMode = !bCinematicMode;
-    if (bNewCinematicMode && Action->bObserverOnly) { Action->bObserverOnly = FALSE; return; }
+    // bObserverOnly means the matinee only affects observers — skip without mutating the flag,
+    // so the real OLPlayerController still sees the original value when it processes the action.
+    if (Action->bObserverOnly) return;
     eventSetCinematicMode(Action, bNewCinematicMode, Action->bHidePlayer, Action->bHideHUD,
         Action->bDisableMovement, Action->bDisableTurning, Action->bDisableInput);
 }

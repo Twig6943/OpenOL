@@ -1,4 +1,5 @@
  #include "OLGame.h"
+#include "HeroChannel.h"
 #include "EngineAnimClasses.h"
 #include "UDKBaseAnimationClasses.h"
 #include "OLGameAnimClasses.h"
@@ -47,7 +48,8 @@ UBOOL AOLHero::IsSpecialMoveCompleted()
 		return TRUE;
 
 	// Check whether we're stuck - failsafe against missed notifies (should fix those but i'm not sure how it happens)
-	if (RealVelocity.IsNearlyZero(KINDA_SMALL_NUMBERF) && appIsNearlyEqual(LocomotionAnimNode->NodeTotalWeight, 1.0f))
+	// Dummy has no controller input so RealVelocity is always zero — skip the failsafe entirely.
+	if (!bIsDummyPawn && RealVelocity.IsNearlyZero(KINDA_SMALL_NUMBERF) && appIsNearlyEqual(LocomotionAnimNode->NodeTotalWeight, 1.0f))
 	{
 		if (SpecialMoveStalledTimestamp <= 0.0f)
 		{
@@ -195,10 +197,15 @@ void AOLHero::FinishSpecialMove(ESpecialMoveType completedMove, UBOOL bCancellin
 				{
 					// Consume the CSA slot so the prompt disappears (mirrors TryActivate + Completed)
 					ActiveCSA->TriggerCount++;
-					// Fire CSA Kismet event after the remote player's SMT_CSA completes
 					AOLPlayerController* PC = Utils::GetOLPC();
 					if (PC)
+					{
+						// Consume required item if any (mirrors OLCSA::Completed on the remote side)
+						if (ActiveCSA->bConsumeItem && ActiveCSA->RequiredItem != NAME_None && PC->InventoryManager)
+							PC->InventoryManager->ConsumeItem(ActiveCSA->RequiredItem);
+						// Fire CSA Kismet event after the remote player's SMT_CSA completes
 						PC->ObserverActivateCSA(ActiveCSA, TRUE);
+					}
 				}
 				else
 				{
@@ -259,12 +266,14 @@ void AOLHero::FinishSpecialMove(ESpecialMoveType completedMove, UBOOL bCancellin
 		break;	
 	case SMT_EnterStruggle:
 		{
-			OLPC->StruggleEntryCompleted();
+			if (!bIsDummyPawn && OLPC)
+				OLPC->StruggleEntryCompleted();
 		}
 		break;
 	case SMT_ExitStruggle:
 		{
-			OLPC->StruggleExitCompleted();
+			if (!bIsDummyPawn && OLPC)
+				OLPC->StruggleExitCompleted();
 		}
 		break;
 	case SMT_StopPushingObject:
@@ -1081,7 +1090,7 @@ void AOLHero::PlayAnimForSpecialMove(ESpecialMoveType moveType)
 		break;
 	case SMT_CSA:
 		{
-			if (ActiveCSA->AnimName != NAME_None)
+			if (ActiveCSA && ActiveCSA->AnimName != NAME_None)
 			{
 				PlayFullBodyAnim(ActiveCSA->AnimName, 1.f, 0.25f, 0.5f);
 			}
@@ -1430,7 +1439,13 @@ void AOLHero::PlayAnimForSpecialMove(ESpecialMoveType moveType)
 		break;
 	case SMT_EnterStruggle:
 		{
-			if (bIsDummyPawn || !OLPC) break;
+			if (bIsDummyPawn)
+			{
+				if (DummyStruggleEntryAnimPlayer != NAME_None)
+					PlayFullBodyAnim(DummyStruggleEntryAnimPlayer, 1.0f, 0.1f, 0.1f);
+				break;
+			}
+			if (!OLPC) break;
 			PlayFullBodyAnim(OLPC->Struggle.Config.EntryAnimPlayer, 1.0f, OLPC->Struggle.Config.EntryPlayerBlendInTime, 0.1f);
 		}
 		break;
@@ -7945,7 +7960,28 @@ UBOOL AOLHero::TryCSA(UBOOL playerInteraction)
 		if (csa && csa->TryActivate(this, playerInteraction))
 		{
 			ActiveCSA = csa;
-			
+
+			// Compute anim start pos/dir up front for both StartSpecialMove and MpSendCSAActivation.
+			FVector expectedAnimFwd   = CharForward;
+			FVector expectedAnimStart = Location;
+			if (csa->AnimName != NAME_None)
+			{
+				if (csa->ReferenceAnimActor)
+				{
+					expectedAnimFwd   = -csa->ReferenceAnimActor->Rotation.Vector();
+					expectedAnimStart = csa->ReferenceAnimActor->Location - csa->AnimStartDistFwd*expectedAnimFwd - csa->AnimStartDistRight*csa->ReferenceAnimActor->Rotation.Right();
+				}
+				else
+				{
+					expectedAnimFwd   = -csa->Rotation.Vector();
+					expectedAnimStart = csa->Location - csa->AnimStartDistFwd*expectedAnimFwd - csa->AnimStartDistRight*csa->Rotation.Right();
+				}
+				expectedAnimStart.Z = Location.Z;
+			}
+
+			// Send immediately before StartSpecialMove so instant CSA (no anim) is not missed.
+			MpSendCSAActivation(csa, expectedAnimStart, expectedAnimFwd);
+
 			if (csa->AnimName == NAME_None)
 			{
 				StartSpecialMove(SMT_CSA, Location, CharForward, APTT_TargetAtStart);
@@ -7953,20 +7989,6 @@ UBOOL AOLHero::TryCSA(UBOOL playerInteraction)
 			}
 			else
 			{
-				FVector expectedAnimFwd(0.0f);
-				FVector expectedAnimStart(0.0f);
-
-				if (csa->ReferenceAnimActor)
-				{
-					expectedAnimFwd = -csa->ReferenceAnimActor->Rotation.Vector();
-					expectedAnimStart = csa->ReferenceAnimActor->Location - csa->AnimStartDistFwd*expectedAnimFwd - csa->AnimStartDistRight*csa->ReferenceAnimActor->Rotation.Right();
-				}
-				else
-				{
-					expectedAnimFwd = -csa->Rotation.Vector();
-					expectedAnimStart = csa->Location - csa->AnimStartDistFwd*expectedAnimFwd - csa->AnimStartDistRight*csa->Rotation.Right();
-				}
-				expectedAnimStart.Z = Location.Z;
 				StartSpecialMove(SMT_CSA, expectedAnimStart, expectedAnimFwd, APTT_TargetAtStart);
 			}
 
@@ -10795,7 +10817,7 @@ void AOLHero::DieNotify()
 		Die();
 	}
 
-	if (bInStruggle)
+	if (bInStruggle && !bIsDummyPawn && OLPC)
 	{
 		OLPC->StruggleExitCompleted();
 	}
@@ -11080,6 +11102,36 @@ void AOLHero::OnPossess()
 void AOLHero::TickPrePhysics(FLOAT deltaTime)
 {
 	UBOOL dying = (SpecialMove == SMT_Dying);
+
+	if (bIsDummyPawn)
+	{
+		if (SpecialMove != SMT_None)
+		{
+			// physWalking exits immediately without a controller so CalcVelocity never
+			// runs and ApplyPositionAdjustment is never reached. At PHYS_Custom our
+			// physCustom override handles it normally. Only step in for PHYS_Walking.
+			if (Physics == PHYS_Walking && AdjustPosition.Active && !AdjustPosition.Done)
+			{
+				AdjustPosition.ElapsedTime += deltaTime;
+				FLOAT deltaCorrection = deltaTime / AdjustPosition.CorrectionTime;
+				if (AdjustPosition.ElapsedTime > AdjustPosition.CorrectionTime)
+				{
+					deltaCorrection = (AdjustPosition.CorrectionTime - (AdjustPosition.ElapsedTime - deltaTime)) / AdjustPosition.CorrectionTime;
+					AdjustPosition.ElapsedTime = AdjustPosition.CorrectionTime;
+				}
+				// Apply positional correction directly via MoveActor (bypasses physWalking).
+				const FVector Delta = deltaCorrection * AdjustPosition.PositionError;
+				if (!Delta.IsNearlyZero())
+				{
+					FCheckResult Hit(1.f);
+					GWorld->MoveActor(this, Delta, Rotation, 0, Hit);
+				}
+			}
+
+			UpdateSpecialMove(deltaTime);
+		}
+		return;
+	}
 
 	Super::TickPrePhysics(deltaTime);
 
@@ -11460,6 +11512,25 @@ void AOLHero::ClearShadowIdleAnim()
     if (!FullBodyAnimSlot)
         return;
     FullBodyAnimSlot->StopCustomAnim(0.3f);
+
+    // When stopping a cinematic anim on a dummy, scan the AnimSequence notifies and fire
+    // any that haven't played yet (e.g. Wheelchair_LOOP_STOP at the end of the anim).
+    if (bIsDummyPawn)
+    {
+        UAnimNodeSequence* SeqNode = FullBodyAnimSlot ? FullBodyAnimSlot->GetCustomAnimNodeSeq() : NULL;
+        if (SeqNode && SeqNode->AnimSeq)
+        {
+            FLOAT CurPos = SeqNode->CurrentTime;
+            FLOAT EndPos = SeqNode->AnimSeq->SequenceLength;
+            for (INT ni = 0; ni < SeqNode->AnimSeq->Notifies.Num(); ni++)
+            {
+                const FAnimNotifyEvent& Notify = SeqNode->AnimSeq->Notifies(ni);
+                // Fire notifies that are at or after the current position (not yet triggered).
+                if (Notify.Notify && Notify.Time >= CurPos && Notify.Time < EndPos)
+                    Notify.Notify->Notify(SeqNode);
+            }
+        }
+    }
 }
 
 void AOLHero::ResetDummyAnimState()

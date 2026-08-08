@@ -5003,6 +5003,10 @@ public:
     FLOAT SpecialMoveTargetYaw;
     FLOAT DummyPickupDistHorz;
     FLOAT DummyPickupDistVert;
+    FLOAT DummyStrugglePlayRate;
+    FName DummyStruggleEntryAnimPlayer;
+    FName DummyStruggleCycleAnimPlayer;
+    FName DummyStruggleCycleAnimEnemy;
     FLOAT EnterBedZ;
     FLOAT LastCompletedDoorInteractionTime;
     FLOAT LastActiveLedgeTimestamp;

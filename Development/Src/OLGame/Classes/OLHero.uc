@@ -428,6 +428,12 @@ var bool bPickupCrouched;
 var float DummyPickupDistHorz;
 var float DummyPickupDistVert;
 var bool  bDummyPickupIsDocument;
+// Struggle anim play rate received from the remote player (dummy only).
+var float DummyStrugglePlayRate;
+// Struggle anim names received from the remote player via SMT_EnterStruggle packet (dummy only).
+var name  DummyStruggleEntryAnimPlayer;
+var name  DummyStruggleCycleAnimPlayer;
+var name  DummyStruggleCycleAnimEnemy;
 var float EnterBedZ;
 var float LastCompletedDoorInteractionTime;
 

@@ -124,6 +124,17 @@ struct FSmtTypePacket
     BYTE    CSAPathLen;
     BYTE    CSAPath[127];
 
+    // Struggle params (SMT_EnterStruggle): entry + cycle anim names for player,
+    // plus AnimSet path to load (mirrors Cinematic "Package.Name|AnimSeqName" approach).
+    BYTE    StruggleEntryAnimPlayerLen;
+    BYTE    StruggleEntryAnimPlayer[63];
+    BYTE    StruggleCycleAnimPlayerLen;
+    BYTE    StruggleCycleAnimPlayer[63];
+    BYTE    StruggleCycleAnimEnemyLen;
+    BYTE    StruggleCycleAnimEnemy[63];
+    BYTE    StruggleAnimSetPathLen;
+    BYTE    StruggleAnimSetPath[127];
+
     BYTE    _pad[2];
 };
 #pragma pack(pop)

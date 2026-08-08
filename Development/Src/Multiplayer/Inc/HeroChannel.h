@@ -64,6 +64,8 @@ struct FHeroStatePacket
     FLOAT    ParryEnemyRelYaw;
     // 0=None, 1=Water, 2=Blood — surface material under feet at last footstep
     INT      FootstepSurface;
+    // Struggle cycle anim play rate (0 when not struggling)
+    FLOAT    StrugglePlayRate;
     // Optional tail — only present on first packet (len > HERO_STATE_MIN_SIZE)
     TCHAR    Nick[33];
     UBOOL    bHasNick;
@@ -108,3 +110,8 @@ public:
 extern FHeroChannelReceiveTicker GHeroChannelReceiveTicker;
 
 extern FHeroChannelTicker GHeroChannelTicker;
+
+// Called from TryCSA at the moment of activation — sends SMT_CSA packet immediately
+// instead of waiting for the next tick (which would miss instant CSAs).
+// AnimStart/AnimFwd are the expectedAnimStart/expectedAnimFwd computed in TryCSA.
+void MpSendCSAActivation(AOLCSA* CSA, const FVector& AnimStart, const FVector& AnimFwd);

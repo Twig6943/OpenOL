@@ -2677,8 +2677,24 @@ void UOLAnimSelectByShadowProxy::OnBecomeRelevant()
 
 void UOLAnimStruggleCycle::OnBecomeRelevant()
 {
-	AOLPlayerController* OLPC = Utils::GetOLPC();
+	if (SkelComponent)
+	{
+		AOLHero* Hero = Cast<AOLHero>(SkelComponent->GetOwner());
+		if (Hero && Hero->bIsDummyPawn)
+		{
+			// Dummy: anim names are received via SMT_EnterStruggle packet.
+			// Play rate is synced each tick via DummyStrugglePlayRate.
+			// Owner is always AOLHero here (enemy mesh goes through the OLPC path below).
+			FName AnimName = Hero->DummyStruggleCycleAnimPlayer;
+			if (AnimName != NAME_None)
+				SetAnim(AnimName);
+			PlayAnim(TRUE, Hero->DummyStrugglePlayRate, 0.0f);
+			Super::OnBecomeRelevant();
+			return;
+		}
+	}
 
+	AOLPlayerController* OLPC = Utils::GetOLPC();
 	if (OLPC && SkelComponent)
 	{
 		UBOOL bHero = Cast<AOLHero>(SkelComponent->GetOwner()) != NULL;
@@ -2692,12 +2708,20 @@ void UOLAnimStruggleCycle::OnBecomeRelevant()
 
 void UOLAnimStruggleCycle::TickAnim(FLOAT deltaTime)
 {
-	AOLPlayerController* OLPC = Utils::GetOLPC();
-
-	if (OLPC)
+	if (SkelComponent)
 	{
-		Rate = OLPC->Struggle.SmoothedAnimPlayRate;		
+		AOLHero* Hero = Cast<AOLHero>(SkelComponent->GetOwner());
+		if (Hero && Hero->bIsDummyPawn)
+		{
+			Rate = Hero->DummyStrugglePlayRate;
+			Super::TickAnim(deltaTime);
+			return;
+		}
 	}
+
+	AOLPlayerController* OLPC = Utils::GetOLPC();
+	if (OLPC)
+		Rate = OLPC->Struggle.SmoothedAnimPlayRate;
 
 	Super::TickAnim(deltaTime);
 }

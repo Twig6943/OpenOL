@@ -826,7 +826,15 @@ void UOLSeqAct_Struggle::Start()
 
 UBOOL UOLSeqAct_Struggle::UpdateOp(FLOAT deltaTime)
 {
+	// bObserverOnly is set by MarkChainRemoteObserver when this action is triggered
+	// for a remote player (MultiplayerController). Skip entirely — the remote side
+	// has no local OLPC to drive and no enemy anim node to update.
+	if (bObserverOnly)
+		return FALSE;
+
 	AOLPlayerController* OLPC = Utils::GetOLPC();
+	if (!OLPC)
+		return FALSE;
 
 	if (InputLinks(0).bHasImpulse) // Init
 	{

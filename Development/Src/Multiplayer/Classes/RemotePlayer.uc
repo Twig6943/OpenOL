@@ -27,6 +27,7 @@ var vector  PendingSMTGrabPos;
 var vector  PendingSMTGrabDir;
 var float   DummySMTLockUntil;
 
+
 var int     LastRemoteLocomotionMode;
 
 var int     LastRemoteHealth;

@@ -1997,13 +1997,16 @@ UBOOL AOLBot::TryGrabNormal(UBOOL bCrouched)
 
 	if (TargetPlayer->bIsDummyPawn)
 	{
+		// Mirror TryGrabNormal: pass CharForward (victim's facing) as targetDirection so
+		// ActivatePositionAdjustment on the client computes headingError correctly.
+		// bLeftAnim/blendAlpha mirror TryGrabNormal's lookAngleToAttacker computation.
 		FVector toEnemy = (AttackStartLocation - GrabTargetStartLocation).SafeNormal2D();
+		FVector charFwd = TargetPlayer->Rotation.Vector(); charFwd.Z = 0.f; charFwd = charFwd.SafeNormal();
 		FLOAT lookAngle = UNR_TO_DEG * FRotator::NormalizeAxis(TargetPlayer->EyeRotation.Yaw - toEnemy.Rotation().Yaw);
 		FLOAT blendAlpha = Clamp(Abs(lookAngle / 180.0f), 0.0f, 1.0f);
 		UBOOL bLeftAnimFlag = lookAngle > 0.0f;
-		// Pass toEnemy as targetDirection so ActivatePositionAdjustment rotates the player toward the attacker
 		// GrabType=0 (Normal)
-		eventNotifyDummyGrab(GrabTargetStartLocation, toEnemy, bCrouched, blendAlpha, bLeftAnimFlag, 0);
+		eventNotifyDummyGrab(GrabTargetStartLocation, charFwd, bCrouched, blendAlpha, bLeftAnimFlag, 0);
 	}
 	else if (!TargetPlayer->TryGrabNormal(EnemyPawn, GrabTargetStartLocation, AttackStartLocation))
 	{
@@ -2071,11 +2074,12 @@ UBOOL AOLBot::TryGrabUnder()
 	if (TargetPlayer->bIsDummyPawn)
 	{
 		FVector toEnemy = (AttackStartLocation - GrabTargetStartLocation).SafeNormal2D();
+		FVector charFwd = TargetPlayer->Rotation.Vector(); charFwd.Z = 0.f; charFwd = charFwd.SafeNormal();
 		FLOAT lookAngle = UNR_TO_DEG * FRotator::NormalizeAxis(TargetPlayer->EyeRotation.Yaw - toEnemy.Rotation().Yaw);
 		FLOAT blendAlpha = Saturate(Abs(lookAngle / 180.0f));
 		UBOOL bLeftAnimFlag = lookAngle > 0.0f;
 		// GrabType=4 (Under)
-		eventNotifyDummyGrab(GrabTargetStartLocation, toEnemy, FALSE, blendAlpha, bLeftAnimFlag, 4);
+		eventNotifyDummyGrab(GrabTargetStartLocation, charFwd, FALSE, blendAlpha, bLeftAnimFlag, 4);
 	}
 	else if (!TargetPlayer->TryGrabFromUnder(EnemyPawn, GrabTargetStartLocation, AttackStartLocation))
 	{
