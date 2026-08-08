@@ -3,6 +3,8 @@
   <a href="./README_RU.md">🇷🇺 Русский</a>
 </p>
 
+<img src="https://github.com/Heawikk/OpenOL-Multiplayer-SC/blob/main/OpenOL_1.gif" width="100%">
+
 # OpenOL — Modded "Client" for Outlast Game
 ***NOTE (mainly for Red Barrels):** **In addition** to the files from this repository, you should still have the **original source files and a licensed copy of the game** (for content files, etc.). The files from this repository are provided only for **modding convenience***<p>
 If you happen to have the original Outlast source files, you can add/replace them with these
