@@ -135,16 +135,6 @@ void UPushableChannel::TickSend(FLOAT DeltaTime)
 }
 
 // ============================================================================
-// OnState — legacy text receive (kept for PacketRouter.uc compatibility, no-op).
-// All pushable state now arrives via OnBinaryPacket in MultiplayerController.
-// ============================================================================
-
-void UPushableChannel::OnState(const TArray<FString>& Parts, INT SenderID)
-{
-    // Superseded by binary MPKT_PUSH_STATE; no-op.
-}
-
-// ============================================================================
 // BroadcastPushableStates — send current state of all pushed pushables.
 // Called on REQUEST_STATE from a joining player.
 // ============================================================================

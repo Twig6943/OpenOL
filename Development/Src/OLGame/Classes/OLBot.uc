@@ -544,7 +544,7 @@ event PickBestTarget()
 {
 	local OLHero H, Best, MeleeOverride;
 	local float Score, BestScore, CurrentScore, Threshold, Dist;
-	local byte R, G, B;
+	MeleeOverride = None;
 
 	if (TargetLockTimer > 0.f)
 		return;
@@ -567,15 +567,15 @@ event PickBestTarget()
 		}
 
 		// Debug: green = high score, red = low. Blue tint if dummy.
-		R = byte(255 * (1.f - Score));
-		G = byte(255 * Score);
-		B = H.bIsDummyPawn ? 180 : 0;
-		DrawDebugLine(EnemyPawn.Location, H.Location, R, G, B, false);
-		DrawDebugSphere(H.Location + vect(0,0,80), 30, 6, R, G, B, false);
-		DrawDebugString(H.Location + vect(0,0,110),
-			(H.bIsDummyPawn ? "[D]" : "[L]") $ " s=" $ int(Score*100)
-			$ (Dist <= EnemyPawn.AttackRange ? " CLOSE" : ""),
-			, , 0.0);
+		//R = byte(255 * (1.f - Score));
+		//G = byte(255 * Score);
+		//B = H.bIsDummyPawn ? 180 : 0;
+		//DrawDebugLine(EnemyPawn.Location, H.Location, R, G, B, false);
+		//DrawDebugSphere(H.Location + vect(0,0,80), 30, 6, R, G, B, false);
+		//DrawDebugString(H.Location + vect(0,0,110),
+		//	(H.bIsDummyPawn ? "[D]" : "[L]") $ " s=" $ int(Score*100)
+		//	$ (Dist <= EnemyPawn.AttackRange ? " CLOSE" : ""),
+		//	, , 0.0);
 
 		if (Best == None || Score > BestScore)
 		{
@@ -585,10 +585,10 @@ event PickBestTarget()
 	}
 
 	// Debug: print scores above enemy head (Duration=0 = one frame only)
-	DrawDebugString(EnemyPawn.Location + vect(0,0,120),
-		"Cur:" $ int(CurrentScore * 100) $ " Best:" $ int(BestScore * 100)
-		$ " T:" $ (TargetPlayer != None ? string(TargetPlayer.Name) : "none"),
-		, , 0.0);
+	//DrawDebugString(EnemyPawn.Location + vect(0,0,120),
+	//	"Cur:" $ int(CurrentScore * 100) $ " Best:" $ int(BestScore * 100)
+	//	$ " T:" $ (TargetPlayer != None ? string(TargetPlayer.Name) : "none"),
+	//	, , 0.0);
 
 	// Don't switch targets while attacking — let the current attack finish.
 	if (InAttackRange)
@@ -939,7 +939,7 @@ event NotifyDummyGrab(vector GrabTargetLoc, vector CharDir, bool bCrouched, floa
 {
 	local OLPlayerController LocalPC;
 	local int EnemyTypeInt;
-	if (TargetPlayer == None || !TargetPlayer.bIsDummyPawn)
+	if (EnemyPawn == None || TargetPlayer == None || !TargetPlayer.bIsDummyPawn)
 		return;
 	// Mirror EEnemyType enum: ET_Soldier=0, ET_Generic=1, ET_Surgeon=2, ET_Swarm=3, ET_Other=4, ET_Groom=5, ET_Cannibal=6
 	if (ClassIsChildOf(EnemyPawn.Class, class'OLEnemyGroom'))
@@ -992,7 +992,7 @@ function NotifyDummyKill(int KillType, optional vector AnimStart, optional vecto
 	local vector ToEnemy;
 	local float LookAngle, BlendAlpha;
 	local bool bBackAnim, bLeftAnim;
-	if (TargetPlayer == None || !TargetPlayer.bIsDummyPawn)
+	if (EnemyPawn == None || TargetPlayer == None || !TargetPlayer.bIsDummyPawn)
 		return;
 	if (ClassIsChildOf(EnemyPawn.Class, class'OLEnemyGroom'))
 		EnemyTypeInt = 5;

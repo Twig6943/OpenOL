@@ -91,7 +91,7 @@ event PostRender()
     local vector ScreenPos, HeadPos, CamLoc;
     local rotator CamRot;
     local int ValidCount;
-    local float PanelW, PanelH, Padding, BarsWidth;
+    local float PanelH, Padding, BarsWidth;
     local float TiltDeg, TiltPhase;
     local rotator TiltRot;
     local float TagScale, Dist;

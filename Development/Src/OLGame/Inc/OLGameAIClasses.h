@@ -878,7 +878,7 @@ public:
     virtual void EnableRootMotion();
     virtual void DisableRootMotion();
     virtual void TurnOnSpot(FRotator EndRotation);
-    virtual void ApplyUniformColorOverride(FLinearColor Color);
+    virtual void ApplyUniformColorOverride(FLinearColor OverrideColor);
     virtual void StartAvoid(class AOLEnemyPawn* OtherPawn);
     virtual void StartKnockback(class AOLHero* Hero,FVector HitNormal);
     virtual void StartDoorKnockback(FVector Direction,UBOOL bLocker);
@@ -927,9 +927,9 @@ public:
     }
     DECLARE_FUNCTION(execApplyUniformColorOverride)
     {
-        P_GET_STRUCT(FLinearColor,Color);
+        P_GET_STRUCT(FLinearColor,OverrideColor);
         P_FINISH;
-        this->ApplyUniformColorOverride(Color);
+        this->ApplyUniformColorOverride(OverrideColor);
     }
     DECLARE_FUNCTION(execStartAvoid)
     {

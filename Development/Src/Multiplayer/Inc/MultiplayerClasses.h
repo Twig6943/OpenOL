@@ -48,13 +48,6 @@ public:
     virtual void TickSend(FLOAT DeltaTime);
     virtual void OnLocalDoorOpen(class AOLDoor* D);
     virtual void OnLocalDoorClose(class AOLDoor* D);
-    virtual void OnDoorLock(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnDoorUnlock(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnDoorState(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnDoorOpen(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnDoorClose(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnDoorAngle(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnDoorParams(const TArray<FString>& Parts,INT SenderID);
     virtual void OnDoorDeny(INT X,INT Y,INT Z);
     virtual void BroadcastDoorStates(const FString& LevelFilter);
     virtual void OnBinaryPacket(INT SenderID,BYTE PktType,BYTE* Data,INT DataLen);
@@ -75,55 +68,6 @@ public:
         P_GET_OBJECT(AOLDoor,D);
         P_FINISH;
         this->OnLocalDoorClose(D);
-    }
-    DECLARE_FUNCTION(execOnDoorLock)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDoorLock(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnDoorUnlock)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDoorUnlock(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnDoorState)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDoorState(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnDoorOpen)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDoorOpen(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnDoorClose)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDoorClose(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnDoorAngle)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDoorAngle(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnDoorParams)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDoorParams(Parts,SenderID);
     }
     DECLARE_FUNCTION(execOnDoorDeny)
     {
@@ -170,9 +114,6 @@ public:
     virtual void SendEnemyDoorBreak(class AOLEnemyPawn* Enemy,class AOLDoor* D,UBOOL bReversed);
     virtual void SendAllDeletes();
     virtual void BroadcastSpawns();
-    virtual void OnSpawn(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnDel(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnSmt(const TArray<FString>& Parts,INT SenderID);
     virtual void OnRequestEnemies(INT SenderID);
     virtual void OnBinaryLoc(INT SenderID,BYTE* Data,INT DataLen);
     virtual void OnBinaryPacket(INT SenderID,BYTE PktType,BYTE* Data,INT DataLen);
@@ -248,27 +189,6 @@ public:
         P_FINISH;
         this->BroadcastSpawns();
     }
-    DECLARE_FUNCTION(execOnSpawn)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnSpawn(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnDel)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnDel(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnSmt)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnSmt(Parts,SenderID);
-    }
     DECLARE_FUNCTION(execOnRequestEnemies)
     {
         P_GET_INT(SenderID);
@@ -321,25 +241,14 @@ public:
     virtual void SendMesh();
     virtual void SendCinematicAnimation();
     virtual void SendSpecialMoveType();
-    virtual void SendSpecialMovePosition(INT SMT);
     virtual void SendPickupStart(INT CurSMT);
     virtual void SendPickupState(INT CurSMT);
-    virtual void SendCornerPeekState(INT CurSMT);
     virtual void SendCornerPeekData();
     virtual void SendPlayerHit(INT TargetPlayerID,FLOAT Damage,FLOAT KnockbackPower,FVector HitDir);
     virtual void SendPlayerGrab(INT TargetPlayerID,FVector GrabTargetLoc,FVector CharDir,UBOOL bCrouched,INT EnemyTypeInt,FLOAT BlendAlpha,UBOOL bLeftAnim,INT GrabType);
     virtual void SendPlayerThrow(INT TargetPlayerID,FLOAT ThrowRotation);
     virtual void SendPlayerKill(INT TargetPlayerID,INT EnemyTypeInt,INT WeaponType,UBOOL bBackAnim,UBOOL bLeftAnim,FLOAT BlendAlpha,FVector AnimStart,FVector CharDir,INT KillType,INT VictimYaw);
-    virtual void OnLoc(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnHeadRot(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnMesh(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnAnim(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnSmt(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnSmtPos(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnCornerPeek(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnFootstep(const TArray<FString>& Parts,INT SenderID);
     virtual void OnBinaryLoc(INT SenderID,BYTE* Data,INT DataLen);
-    virtual void OnSmtPosBinary(INT SenderID,BYTE* Data,INT DataLen);
     virtual void OnBinaryHeadRot(INT SenderID,BYTE* Data,INT DataLen);
     virtual void OnBinaryMesh(INT SenderID,BYTE* Data,INT DataLen);
     virtual void OnBinaryCinematicAnim(INT SenderID,BYTE* Data,INT DataLen);
@@ -348,14 +257,12 @@ public:
     virtual void ApplyCamcorderState(INT Idx,class AOLHero* Dummy,INT NewCamcorderState);
     virtual void ApplySpecialMoveTransition(INT Idx,class AOLHero* Dummy,INT NewSpecialMove);
     virtual void ApplyLocomotionMode(INT Idx,class AOLHero* Dummy,INT NewLocomotionMode);
-    virtual void OnHit(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnGrab(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnThrow(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnKill(const TArray<FString>& Parts,INT SenderID);
     virtual void SendPlayerDied();
     virtual void SendPlayerRespawned();
     virtual void SendDisconnect();
     virtual void SendRequestEnemies();
+    virtual void SendRequestDoors();
+    virtual void SendRequestPushables();
     virtual void OnBinaryPlayerLifecycle(INT SenderID,BYTE* Data,INT DataLen);
     DECLARE_FUNCTION(execSendGlobalState)
     {
@@ -382,12 +289,6 @@ public:
         P_FINISH;
         this->SendSpecialMoveType();
     }
-    DECLARE_FUNCTION(execSendSpecialMovePosition)
-    {
-        P_GET_INT(SMT);
-        P_FINISH;
-        this->SendSpecialMovePosition(SMT);
-    }
     DECLARE_FUNCTION(execSendPickupStart)
     {
         P_GET_INT(CurSMT);
@@ -399,12 +300,6 @@ public:
         P_GET_INT(CurSMT);
         P_FINISH;
         this->SendPickupState(CurSMT);
-    }
-    DECLARE_FUNCTION(execSendCornerPeekState)
-    {
-        P_GET_INT(CurSMT);
-        P_FINISH;
-        this->SendCornerPeekState(CurSMT);
     }
     DECLARE_FUNCTION(execSendCornerPeekData)
     {
@@ -455,62 +350,6 @@ public:
         P_FINISH;
         this->SendPlayerKill(TargetPlayerID,EnemyTypeInt,WeaponType,bBackAnim,bLeftAnim,BlendAlpha,AnimStart,CharDir,KillType,VictimYaw);
     }
-    DECLARE_FUNCTION(execOnLoc)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnLoc(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnHeadRot)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnHeadRot(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnMesh)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnMesh(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnAnim)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnAnim(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnSmt)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnSmt(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnSmtPos)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnSmtPos(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnCornerPeek)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnCornerPeek(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnFootstep)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnFootstep(Parts,SenderID);
-    }
     DECLARE_FUNCTION(execOnBinaryLoc)
     {
         P_GET_INT(SenderID);
@@ -518,14 +357,6 @@ public:
         P_GET_INT(DataLen);
         P_FINISH;
         this->OnBinaryLoc(SenderID,Data,DataLen);
-    }
-    DECLARE_FUNCTION(execOnSmtPosBinary)
-    {
-        P_GET_INT(SenderID);
-        P_GET_ARRAY_REF(BYTE,Data);
-        P_GET_INT(DataLen);
-        P_FINISH;
-        this->OnSmtPosBinary(SenderID,Data,DataLen);
     }
     DECLARE_FUNCTION(execOnBinaryHeadRot)
     {
@@ -591,34 +422,6 @@ public:
         P_FINISH;
         this->ApplyLocomotionMode(Idx,Dummy,NewLocomotionMode);
     }
-    DECLARE_FUNCTION(execOnHit)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnHit(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnGrab)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnGrab(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnThrow)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnThrow(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnKill)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnKill(Parts,SenderID);
-    }
     DECLARE_FUNCTION(execSendPlayerDied)
     {
         P_FINISH;
@@ -638,6 +441,16 @@ public:
     {
         P_FINISH;
         this->SendRequestEnemies();
+    }
+    DECLARE_FUNCTION(execSendRequestDoors)
+    {
+        P_FINISH;
+        this->SendRequestDoors();
+    }
+    DECLARE_FUNCTION(execSendRequestPushables)
+    {
+        P_FINISH;
+        this->SendRequestPushables();
     }
     DECLARE_FUNCTION(execOnBinaryPlayerLifecycle)
     {
@@ -674,13 +487,11 @@ public:
     BITFIELD bSentPlayerDied:1;
     BITFIELD bDoorsIndexed:1;
     BITFIELD bPushablesIndexed:1;
-    BITFIELD bTriggeringRemoteEvent:1;
     TArrayNoInit<class URemotePlayer*> RemotePlayers;
     TArrayNoInit<class AActor*> CachedDoors;
     TArrayNoInit<FPendingDoorState> PendingDoorStates;
     TArrayNoInit<FLOAT> LastSentDoorAngle;
     TArrayNoInit<FLOAT> RemoteDoorLockExpiry;
-    TArrayNoInit<FLOAT> LastReceivedDoorAngle;
     TArrayNoInit<class AOLPushableObject*> CachedPushables;
     TArrayNoInit<FPendingPushState> PendingPushStates;
     TArrayNoInit<FLOAT> LastSentPushDisplacement;
@@ -690,10 +501,8 @@ public:
     TArrayNoInit<FLOAT> LastBashLoopSentTime;
     TArrayNoInit<FRemoteEnemyState> RemoteEnemies;
     TArrayNoInit<FString> SentEnemySpawns;
-    TArrayNoInit<FName> AmbientKismetBlacklist;
     TArrayNoInit<FString> TriggerActBlacklist;
     TArrayNoInit<FString> CSAActBlacklist;
-    TArrayNoInit<FString> ActiveRemoteMatineePaths;
     //## END PROPS MultiplayerController
 
     virtual FString NativeGetUsername();
@@ -719,11 +528,11 @@ public:
     virtual void NotifyDummyPlayerGrab(INT TargetPlayerID,FVector GrabTargetLoc,FVector CharDir,UBOOL bCrouched,INT EnemyTypeInt,FLOAT BlendAlpha,UBOOL bLeftAnim,INT GrabType);
     virtual void NotifyDummyPlayerThrow(INT TargetPlayerID,FLOAT ThrowRotation);
     virtual void NotifyDummyPlayerKill(INT TargetPlayerID,INT EnemyTypeInt,INT WeaponType,UBOOL bBackAnim,UBOOL bLeftAnim,FLOAT BlendAlpha,FVector AnimStart,FVector CharDir,INT KillType,INT VictimYaw);
-    virtual void NotifyDummyEnemySMT(class AOLEnemyPawn* Enemy,INT SMTType,INT Param1,INT Param2);
-    virtual void NativeNotifyEnemyDoorOpen(class AOLEnemyPawn* Enemy,class AOLDoor* D,FLOAT Speed,FLOAT Angle);
-    virtual void NativeNotifyEnemyDoorDone(class AOLEnemyPawn* Enemy,class AOLDoor* D,FLOAT CloseSpeed);
-    virtual void NotifyEnemyDoorBash(class AOLEnemyPawn* Enemy,class AOLDoor* D,UBOOL bReversed);
-    virtual void NotifyEnemyDoorBreak(class AOLEnemyPawn* Enemy,class AOLDoor* D,UBOOL bReversed);
+    virtual void NotifyDummyEnemySMT(class AOLEnemyPawn* EnemyPawn,INT SMTType,INT Param1,INT Param2);
+    virtual void NativeNotifyEnemyDoorOpen(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,FLOAT Speed,FLOAT Angle);
+    virtual void NativeNotifyEnemyDoorDone(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,FLOAT CloseSpeed);
+    virtual void NotifyEnemyDoorBash(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,UBOOL bReversed);
+    virtual void NotifyEnemyDoorBreak(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,UBOOL bReversed);
     virtual void NotifyPawnTouchedTrigger(class AActor* TriggerActor);
     virtual void OnInventoryItemConsumed(FName ItemName);
     virtual void OnPickupKismetEvent(class AOLPickableObject* Pickup);
@@ -886,45 +695,45 @@ public:
     }
     DECLARE_FUNCTION(execNotifyDummyEnemySMT)
     {
-        P_GET_OBJECT(AOLEnemyPawn,Enemy);
+        P_GET_OBJECT(AOLEnemyPawn,EnemyPawn);
         P_GET_INT(SMTType);
         P_GET_INT(Param1);
         P_GET_INT(Param2);
         P_FINISH;
-        this->NotifyDummyEnemySMT(Enemy,SMTType,Param1,Param2);
+        this->NotifyDummyEnemySMT(EnemyPawn,SMTType,Param1,Param2);
     }
     DECLARE_FUNCTION(execNativeNotifyEnemyDoorOpen)
     {
-        P_GET_OBJECT(AOLEnemyPawn,Enemy);
+        P_GET_OBJECT(AOLEnemyPawn,EnemyPawn);
         P_GET_OBJECT(AOLDoor,D);
         P_GET_FLOAT(Speed);
         P_GET_FLOAT(Angle);
         P_FINISH;
-        this->NativeNotifyEnemyDoorOpen(Enemy,D,Speed,Angle);
+        this->NativeNotifyEnemyDoorOpen(EnemyPawn,D,Speed,Angle);
     }
     DECLARE_FUNCTION(execNativeNotifyEnemyDoorDone)
     {
-        P_GET_OBJECT(AOLEnemyPawn,Enemy);
+        P_GET_OBJECT(AOLEnemyPawn,EnemyPawn);
         P_GET_OBJECT(AOLDoor,D);
         P_GET_FLOAT(CloseSpeed);
         P_FINISH;
-        this->NativeNotifyEnemyDoorDone(Enemy,D,CloseSpeed);
+        this->NativeNotifyEnemyDoorDone(EnemyPawn,D,CloseSpeed);
     }
     DECLARE_FUNCTION(execNotifyEnemyDoorBash)
     {
-        P_GET_OBJECT(AOLEnemyPawn,Enemy);
+        P_GET_OBJECT(AOLEnemyPawn,EnemyPawn);
         P_GET_OBJECT(AOLDoor,D);
         P_GET_UBOOL(bReversed);
         P_FINISH;
-        this->NotifyEnemyDoorBash(Enemy,D,bReversed);
+        this->NotifyEnemyDoorBash(EnemyPawn,D,bReversed);
     }
     DECLARE_FUNCTION(execNotifyEnemyDoorBreak)
     {
-        P_GET_OBJECT(AOLEnemyPawn,Enemy);
+        P_GET_OBJECT(AOLEnemyPawn,EnemyPawn);
         P_GET_OBJECT(AOLDoor,D);
         P_GET_UBOOL(bReversed);
         P_FINISH;
-        this->NotifyEnemyDoorBreak(Enemy,D,bReversed);
+        this->NotifyEnemyDoorBreak(EnemyPawn,D,bReversed);
     }
     DECLARE_FUNCTION(execNotifyPawnTouchedTrigger)
     {
@@ -1058,7 +867,6 @@ public:
     //## END PROPS PushableChannel
 
     virtual void TickSend(FLOAT DeltaTime);
-    virtual void OnState(const TArray<FString>& Parts,INT SenderID);
     virtual void BroadcastPushableStates();
     virtual class AOLPushableObject* FindPushableByKey(INT KeyX,INT KeyY,INT KeyZ);
     DECLARE_FUNCTION(execTickSend)
@@ -1066,13 +874,6 @@ public:
         P_GET_FLOAT(DeltaTime);
         P_FINISH;
         this->TickSend(DeltaTime);
-    }
-    DECLARE_FUNCTION(execOnState)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnState(Parts,SenderID);
     }
     DECLARE_FUNCTION(execBroadcastPushableStates)
     {
@@ -1152,27 +953,17 @@ public:
     //## BEGIN PROPS WorldChannel
     class AMultiplayerController* ControllerOwner;
     class AOLHero* HeroPawn;
-    TArrayNoInit<FName> SentRemoteEvents;
     //## END PROPS WorldChannel
 
     virtual void SendPickupState(INT CurSMT);
     virtual void SendPickupKismet(class AOLPickableObject* Pickup);
-    virtual void SendCSA(class AOLCSA* CSA);
     virtual void SendItemConsume(FName ItemName);
     virtual void SendRecordingMarker(class AOLRecordingMarker* Marker);
+    virtual void SendMatineeState();
     virtual void OnPawnTouchedTrigger(class AActor* TriggerActor);
-    virtual void OnNick(const TArray<FString>& Parts,INT SenderID);
     virtual void OnBinaryNick(INT SenderID,const FString& Nick);
     virtual void OnBinaryWorldPacket(INT SenderID,BYTE PktType,BYTE* Data,INT DataLen);
     virtual void OnDisconnected(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnTrigger(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnTriggerAct(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnCSA(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnItemConsume(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnLevel(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnPickupState(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnPickupKismet(const TArray<FString>& Parts,INT SenderID);
-    virtual void OnRecordingMarker(const TArray<FString>& Parts,INT SenderID);
     DECLARE_FUNCTION(execSendPickupState)
     {
         P_GET_INT(CurSMT);
@@ -1184,12 +975,6 @@ public:
         P_GET_OBJECT(AOLPickableObject,Pickup);
         P_FINISH;
         this->SendPickupKismet(Pickup);
-    }
-    DECLARE_FUNCTION(execSendCSA)
-    {
-        P_GET_OBJECT(AOLCSA,CSA);
-        P_FINISH;
-        this->SendCSA(CSA);
     }
     DECLARE_FUNCTION(execSendItemConsume)
     {
@@ -1203,18 +988,16 @@ public:
         P_FINISH;
         this->SendRecordingMarker(Marker);
     }
+    DECLARE_FUNCTION(execSendMatineeState)
+    {
+        P_FINISH;
+        this->SendMatineeState();
+    }
     DECLARE_FUNCTION(execOnPawnTouchedTrigger)
     {
         P_GET_OBJECT(AActor,TriggerActor);
         P_FINISH;
         this->OnPawnTouchedTrigger(TriggerActor);
-    }
-    DECLARE_FUNCTION(execOnNick)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnNick(Parts,SenderID);
     }
     DECLARE_FUNCTION(execOnBinaryNick)
     {
@@ -1239,62 +1022,6 @@ public:
         P_FINISH;
         this->OnDisconnected(Parts,SenderID);
     }
-    DECLARE_FUNCTION(execOnTrigger)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnTrigger(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnTriggerAct)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnTriggerAct(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnCSA)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnCSA(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnItemConsume)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnItemConsume(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnLevel)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnLevel(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnPickupState)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnPickupState(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnPickupKismet)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnPickupKismet(Parts,SenderID);
-    }
-    DECLARE_FUNCTION(execOnRecordingMarker)
-    {
-        P_GET_TARRAY(FString,Parts);
-        P_GET_INT(SenderID);
-        P_FINISH;
-        this->OnRecordingMarker(Parts,SenderID);
-    }
     DECLARE_CLASS(UWorldChannel,UObject,0,Multiplayer)
     NO_DEFAULT_CONSTRUCTOR(UWorldChannel)
 };
@@ -1309,13 +1036,6 @@ public:
 AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnBinaryPacket);
 AUTOGENERATE_FUNCTION(UDoorChannel,-1,execBroadcastDoorStates);
 AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorDeny);
-AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorParams);
-AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorAngle);
-AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorClose);
-AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorOpen);
-AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorState);
-AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorUnlock);
-AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnDoorLock);
 AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnLocalDoorClose);
 AUTOGENERATE_FUNCTION(UDoorChannel,-1,execOnLocalDoorOpen);
 AUTOGENERATE_FUNCTION(UDoorChannel,-1,execTickSend);
@@ -1323,9 +1043,6 @@ AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execFindEnemyByName);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execOnBinaryPacket);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execOnBinaryLoc);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execOnRequestEnemies);
-AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execOnSmt);
-AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execOnDel);
-AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execOnSpawn);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execBroadcastSpawns);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execSendAllDeletes);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execSendEnemyDoorBreak);
@@ -1337,14 +1054,12 @@ AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execSendSMT);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execSendSpawn);
 AUTOGENERATE_FUNCTION(UEnemyChannel,-1,execTickSend);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnBinaryPlayerLifecycle);
+AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendRequestPushables);
+AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendRequestDoors);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendRequestEnemies);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendDisconnect);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPlayerRespawned);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPlayerDied);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnKill);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnThrow);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnGrab);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnHit);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execApplyLocomotionMode);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execApplySpecialMoveTransition);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execApplyCamcorderState);
@@ -1353,25 +1068,14 @@ AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnBinarySmtType);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnBinaryCinematicAnim);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnBinaryMesh);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnBinaryHeadRot);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnSmtPosBinary);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnBinaryLoc);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnFootstep);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnCornerPeek);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnSmtPos);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnSmt);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnAnim);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnMesh);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnHeadRot);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execOnLoc);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPlayerKill);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPlayerThrow);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPlayerGrab);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPlayerHit);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendCornerPeekData);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendCornerPeekState);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPickupState);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendPickupStart);
-AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendSpecialMovePosition);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendSpecialMoveType);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendCinematicAnimation);
 AUTOGENERATE_FUNCTION(UHeroChannel,-1,execSendMesh);
@@ -1419,25 +1123,15 @@ AUTOGENERATE_FUNCTION(AMultiplayerHUD,-1,execAddNotification);
 AUTOGENERATE_FUNCTION(AMultiplayerLink,-1,execNativeReloadConfig);
 AUTOGENERATE_FUNCTION(UPushableChannel,-1,execFindPushableByKey);
 AUTOGENERATE_FUNCTION(UPushableChannel,-1,execBroadcastPushableStates);
-AUTOGENERATE_FUNCTION(UPushableChannel,-1,execOnState);
 AUTOGENERATE_FUNCTION(UPushableChannel,-1,execTickSend);
 AUTOGENERATE_FUNCTION(URemotePlayer,-1,execTick);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnRecordingMarker);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnPickupKismet);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnPickupState);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnLevel);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnItemConsume);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnCSA);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnTriggerAct);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnTrigger);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnDisconnected);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnBinaryWorldPacket);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnBinaryNick);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnNick);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execOnPawnTouchedTrigger);
+AUTOGENERATE_FUNCTION(UWorldChannel,-1,execSendMatineeState);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execSendRecordingMarker);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execSendItemConsume);
-AUTOGENERATE_FUNCTION(UWorldChannel,-1,execSendCSA);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execSendPickupKismet);
 AUTOGENERATE_FUNCTION(UWorldChannel,-1,execSendPickupState);
 
@@ -1478,13 +1172,6 @@ FNativeFunctionLookup GMultiplayerUDoorChannelNatives[] =
 	MAP_NATIVE(UDoorChannel, execOnBinaryPacket)
 	MAP_NATIVE(UDoorChannel, execBroadcastDoorStates)
 	MAP_NATIVE(UDoorChannel, execOnDoorDeny)
-	MAP_NATIVE(UDoorChannel, execOnDoorParams)
-	MAP_NATIVE(UDoorChannel, execOnDoorAngle)
-	MAP_NATIVE(UDoorChannel, execOnDoorClose)
-	MAP_NATIVE(UDoorChannel, execOnDoorOpen)
-	MAP_NATIVE(UDoorChannel, execOnDoorState)
-	MAP_NATIVE(UDoorChannel, execOnDoorUnlock)
-	MAP_NATIVE(UDoorChannel, execOnDoorLock)
 	MAP_NATIVE(UDoorChannel, execOnLocalDoorClose)
 	MAP_NATIVE(UDoorChannel, execOnLocalDoorOpen)
 	MAP_NATIVE(UDoorChannel, execTickSend)
@@ -1497,9 +1184,6 @@ FNativeFunctionLookup GMultiplayerUEnemyChannelNatives[] =
 	MAP_NATIVE(UEnemyChannel, execOnBinaryPacket)
 	MAP_NATIVE(UEnemyChannel, execOnBinaryLoc)
 	MAP_NATIVE(UEnemyChannel, execOnRequestEnemies)
-	MAP_NATIVE(UEnemyChannel, execOnSmt)
-	MAP_NATIVE(UEnemyChannel, execOnDel)
-	MAP_NATIVE(UEnemyChannel, execOnSpawn)
 	MAP_NATIVE(UEnemyChannel, execBroadcastSpawns)
 	MAP_NATIVE(UEnemyChannel, execSendAllDeletes)
 	MAP_NATIVE(UEnemyChannel, execSendEnemyDoorBreak)
@@ -1516,14 +1200,12 @@ FNativeFunctionLookup GMultiplayerUEnemyChannelNatives[] =
 FNativeFunctionLookup GMultiplayerUHeroChannelNatives[] = 
 { 
 	MAP_NATIVE(UHeroChannel, execOnBinaryPlayerLifecycle)
+	MAP_NATIVE(UHeroChannel, execSendRequestPushables)
+	MAP_NATIVE(UHeroChannel, execSendRequestDoors)
 	MAP_NATIVE(UHeroChannel, execSendRequestEnemies)
 	MAP_NATIVE(UHeroChannel, execSendDisconnect)
 	MAP_NATIVE(UHeroChannel, execSendPlayerRespawned)
 	MAP_NATIVE(UHeroChannel, execSendPlayerDied)
-	MAP_NATIVE(UHeroChannel, execOnKill)
-	MAP_NATIVE(UHeroChannel, execOnThrow)
-	MAP_NATIVE(UHeroChannel, execOnGrab)
-	MAP_NATIVE(UHeroChannel, execOnHit)
 	MAP_NATIVE(UHeroChannel, execApplyLocomotionMode)
 	MAP_NATIVE(UHeroChannel, execApplySpecialMoveTransition)
 	MAP_NATIVE(UHeroChannel, execApplyCamcorderState)
@@ -1532,25 +1214,14 @@ FNativeFunctionLookup GMultiplayerUHeroChannelNatives[] =
 	MAP_NATIVE(UHeroChannel, execOnBinaryCinematicAnim)
 	MAP_NATIVE(UHeroChannel, execOnBinaryMesh)
 	MAP_NATIVE(UHeroChannel, execOnBinaryHeadRot)
-	MAP_NATIVE(UHeroChannel, execOnSmtPosBinary)
 	MAP_NATIVE(UHeroChannel, execOnBinaryLoc)
-	MAP_NATIVE(UHeroChannel, execOnFootstep)
-	MAP_NATIVE(UHeroChannel, execOnCornerPeek)
-	MAP_NATIVE(UHeroChannel, execOnSmtPos)
-	MAP_NATIVE(UHeroChannel, execOnSmt)
-	MAP_NATIVE(UHeroChannel, execOnAnim)
-	MAP_NATIVE(UHeroChannel, execOnMesh)
-	MAP_NATIVE(UHeroChannel, execOnHeadRot)
-	MAP_NATIVE(UHeroChannel, execOnLoc)
 	MAP_NATIVE(UHeroChannel, execSendPlayerKill)
 	MAP_NATIVE(UHeroChannel, execSendPlayerThrow)
 	MAP_NATIVE(UHeroChannel, execSendPlayerGrab)
 	MAP_NATIVE(UHeroChannel, execSendPlayerHit)
 	MAP_NATIVE(UHeroChannel, execSendCornerPeekData)
-	MAP_NATIVE(UHeroChannel, execSendCornerPeekState)
 	MAP_NATIVE(UHeroChannel, execSendPickupState)
 	MAP_NATIVE(UHeroChannel, execSendPickupStart)
-	MAP_NATIVE(UHeroChannel, execSendSpecialMovePosition)
 	MAP_NATIVE(UHeroChannel, execSendSpecialMoveType)
 	MAP_NATIVE(UHeroChannel, execSendCinematicAnimation)
 	MAP_NATIVE(UHeroChannel, execSendMesh)
@@ -1618,7 +1289,6 @@ FNativeFunctionLookup GMultiplayerUPushableChannelNatives[] =
 { 
 	MAP_NATIVE(UPushableChannel, execFindPushableByKey)
 	MAP_NATIVE(UPushableChannel, execBroadcastPushableStates)
-	MAP_NATIVE(UPushableChannel, execOnState)
 	MAP_NATIVE(UPushableChannel, execTickSend)
 	{NULL, NULL}
 };
@@ -1631,22 +1301,13 @@ FNativeFunctionLookup GMultiplayerURemotePlayerNatives[] =
 
 FNativeFunctionLookup GMultiplayerUWorldChannelNatives[] = 
 { 
-	MAP_NATIVE(UWorldChannel, execOnRecordingMarker)
-	MAP_NATIVE(UWorldChannel, execOnPickupKismet)
-	MAP_NATIVE(UWorldChannel, execOnPickupState)
-	MAP_NATIVE(UWorldChannel, execOnLevel)
-	MAP_NATIVE(UWorldChannel, execOnItemConsume)
-	MAP_NATIVE(UWorldChannel, execOnCSA)
-	MAP_NATIVE(UWorldChannel, execOnTriggerAct)
-	MAP_NATIVE(UWorldChannel, execOnTrigger)
 	MAP_NATIVE(UWorldChannel, execOnDisconnected)
 	MAP_NATIVE(UWorldChannel, execOnBinaryWorldPacket)
 	MAP_NATIVE(UWorldChannel, execOnBinaryNick)
-	MAP_NATIVE(UWorldChannel, execOnNick)
 	MAP_NATIVE(UWorldChannel, execOnPawnTouchedTrigger)
+	MAP_NATIVE(UWorldChannel, execSendMatineeState)
 	MAP_NATIVE(UWorldChannel, execSendRecordingMarker)
 	MAP_NATIVE(UWorldChannel, execSendItemConsume)
-	MAP_NATIVE(UWorldChannel, execSendCSA)
 	MAP_NATIVE(UWorldChannel, execSendPickupKismet)
 	MAP_NATIVE(UWorldChannel, execSendPickupState)
 	{NULL, NULL}
@@ -1666,7 +1327,7 @@ VERIFY_CLASS_OFFSET_NODIE(UHeroChannel,HeroChannel,ControllerOwner)
 VERIFY_CLASS_OFFSET_NODIE(UHeroChannel,HeroChannel,LastPickupLoc)
 VERIFY_CLASS_SIZE_NODIE(UHeroChannel)
 VERIFY_CLASS_OFFSET_NODIE(AMultiplayerController,MultiplayerController,HeroChannel)
-VERIFY_CLASS_OFFSET_NODIE(AMultiplayerController,MultiplayerController,ActiveRemoteMatineePaths)
+VERIFY_CLASS_OFFSET_NODIE(AMultiplayerController,MultiplayerController,CSAActBlacklist)
 VERIFY_CLASS_SIZE_NODIE(AMultiplayerController)
 VERIFY_CLASS_SIZE_NODIE(AMultiplayerHero)
 VERIFY_CLASS_OFFSET_NODIE(AMultiplayerHUD,MultiplayerHUD,MaxNickDisplay)
@@ -1680,7 +1341,7 @@ VERIFY_CLASS_OFFSET_NODIE(URemotePlayer,RemotePlayer,ControllerOwner)
 VERIFY_CLASS_OFFSET_NODIE(URemotePlayer,RemotePlayer,LastRemotePickupLoc)
 VERIFY_CLASS_SIZE_NODIE(URemotePlayer)
 VERIFY_CLASS_OFFSET_NODIE(UWorldChannel,WorldChannel,ControllerOwner)
-VERIFY_CLASS_OFFSET_NODIE(UWorldChannel,WorldChannel,SentRemoteEvents)
+VERIFY_CLASS_OFFSET_NODIE(UWorldChannel,WorldChannel,HeroPawn)
 VERIFY_CLASS_SIZE_NODIE(UWorldChannel)
 #endif // VERIFY_CLASS_SIZES
 #endif // !ENUMS_ONLY

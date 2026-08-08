@@ -6,7 +6,7 @@ class OLNetworkConfig extends Object
 
 var config string IP;
 var config string UdpPort;
-var config string Username;
+var config string UserName;
 var config string RoomCode;
 var config string Password;
 var config bool   SyncInteractable;
@@ -14,13 +14,13 @@ var config bool   SyncEnemies;
 var config bool   SyncMatinees;
 var config bool   SyncPickups;
 
-static function Save(string NewIP, string NewUdpPort, string NewUsername,
+static function Save(string NewIP, string NewUdpPort, string NewUserName,
     bool bSyncInteractable, bool bSyncEnemies, bool bSyncMatinees, bool bSyncPickups,
     string NewRoomCode, string NewPassword)
 {
     default.IP               = NewIP;
     default.UdpPort          = NewUdpPort;
-    default.Username         = NewUsername;
+    default.UserName         = NewUserName;
     default.RoomCode         = NewRoomCode;
     default.Password         = NewPassword;
     default.SyncInteractable = bSyncInteractable;
@@ -32,12 +32,4 @@ static function Save(string NewIP, string NewUdpPort, string NewUsername,
 
 DefaultProperties
 {
-    IP="127.0.0.1"
-    UdpPort="7777"
-    Username="Player"
-    RoomCode="PUBLIC"
-    SyncInteractable=true
-    SyncEnemies=true
-    SyncMatinees=true
-    SyncPickups=true
 }

@@ -12,6 +12,10 @@
 #define MPKT_DOOR_ANGLE     0x15
 #define MPKT_DOOR_PARAMS    0x16
 #define MPKT_DOOR_DENY      0x17
+// DOOR_INIT — sent once per level load for every door (initial registration).
+// Same layout as DOOR_ANGLE: [type(1)][X(4)][Y(4)][Z(4)][AngleX1000(4)]  Total: 17 bytes.
+// Server stores in angle_pkt only if no snapshot exists yet (first-write-wins).
+#define MPKT_DOOR_INIT      0x29
 
 // ============================================================================
 // All door packets use INT location key (X,Y,Z rounded to nearest int).

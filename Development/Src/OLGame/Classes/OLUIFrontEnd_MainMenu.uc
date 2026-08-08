@@ -746,6 +746,4 @@ defaultproperties
 	ExitButtonIndex=-1
 	ModMapsButtonIndex=-1
 
-	ModMapsText="Custom Maps"
-	MultiplayerText="Multiplayer"
 }

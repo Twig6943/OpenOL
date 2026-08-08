@@ -198,11 +198,7 @@ void AOLHero::FinishSpecialMove(ESpecialMoveType completedMove, UBOOL bCancellin
 					// Fire CSA Kismet event after the remote player's SMT_CSA completes
 					AOLPlayerController* PC = Utils::GetOLPC();
 					if (PC)
-					{
-						PC->bExcludeFromKismetPlayer = TRUE;
 						PC->ObserverActivateCSA(ActiveCSA, TRUE);
-						PC->bExcludeFromKismetPlayer = FALSE;
-					}
 				}
 				else
 				{
@@ -212,9 +208,10 @@ void AOLHero::FinishSpecialMove(ESpecialMoveType completedMove, UBOOL bCancellin
 					{
 						if (GWorld->GetNetMode() == NM_Client)
 						{
-							PC->bExcludeFromKismetPlayer = TRUE;
+							// MarkChainRemoteObserver (called inside ObserverActivateCSA) sets
+							// bObserverOnly on SeqAct_Interp nodes before ActivateEvent fires,
+							// so InitInterp skips PC binding without needing bExcludeFromKismetPlayer.
 							PC->ObserverActivateCSA(ActiveCSA, TRUE);
-							PC->bExcludeFromKismetPlayer = FALSE;
 						}
 						else
 						{
@@ -9181,7 +9178,9 @@ void AOLHero::UpdateParrying(FLOAT deltaTime)
 		for (APawn* P = GWorld->GetWorldInfo()->PawnList; P != NULL; P = P->NextPawn)
 		{
 			AOLEnemyPawn* dummy = Cast<AOLEnemyPawn>(P);
-			if (dummy && dummy->Tag == MultiplayerDummyEnemyTag && dummy->Location.DistanceSquared(Location) < Square(MaxDistanceForParry))
+			if (dummy && dummy->Tag == MultiplayerDummyEnemyTag
+				&& (dummy->Modifiers.bShouldAttack || dummy->Modifiers.bAttackOnProximity)
+				&& dummy->Location.DistanceSquared(Location) < Square(MaxDistanceForParry))
 			{
 				FVector toEnemy = dummy->Location - Location;
 				if (((CharForward | toEnemy.SafeNormal2D()) > MinCosAngleForParry) && Abs(toEnemy.Z) < 50.0f)

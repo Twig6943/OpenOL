@@ -72,6 +72,19 @@ static void SendDoorState(INT X, INT Y, INT Z, FLOAT Angle, FLOAT Speed)
     GMpConn.SendBinary(B, N);
 }
 
+// DOOR_INIT: same layout as DOOR_ANGLE but server only stores if no snapshot exists yet.
+static void SendDoorInit(INT X, INT Y, INT Z, FLOAT Angle)
+{
+    BYTE B[DOOR_ANGLE_SIZE];
+    INT N = 0;
+    N = PutU8 (B, N, MPKT_DOOR_INIT);
+    N = PutI32(B, N, X);
+    N = PutI32(B, N, Y);
+    N = PutI32(B, N, Z);
+    N = PutI32(B, N, appRound(Angle * 1000.0f));
+    GMpConn.SendBinary(B, N);
+}
+
 static void SendDoorUnlock(INT X, INT Y, INT Z)
 {
     BYTE B[DOOR_UNLOCK_SIZE];
@@ -254,193 +267,6 @@ void UDoorChannel::OnLocalDoorClose(AOLDoor* D)
 
 // --- Receive (binary) ---
 // All On* functions are now called from OnReceiveBinaryData in MultiplayerController.
-// Parts/SenderID variants kept for PacketRouter.uc compatibility but delegate to binary path.
-
-void UDoorChannel::OnDoorLock(const TArray<FString>& Parts, INT SenderID)
-{
-    // Decode from Parts for PacketRouter.uc compatibility (text fallback)
-    if (Parts.Num() < 5) return;
-    AMultiplayerController* TC = ControllerOwner;
-    if (!TC) return;
-
-    INT X = appAtoi(*Parts(2)), Y = appAtoi(*Parts(3)), Z = appAtoi(*Parts(4));
-    INT DoorIdx = -1;
-    AOLDoor* D = FindIndexedDoor(TC, X, Y, Z, DoorIdx);
-    if (DoorIdx == -1) return;
-
-    if (GMpConn.SyncInteractable && D && D->DoorUser == NULL
-        && (D->DoorState == DS_Idle || D->DoorState == DS_Opening || D->DoorState == DS_Closing))
-    {
-        D->bNetDrivenMove = TRUE;
-        D->NetReplicateInteractStart();
-    }
-
-    INT Idx = TC->FindRemoteIndex(SenderID);
-    if (Idx != -1)
-    {
-        URemotePlayer* P = TC->RemotePlayers(Idx);
-        P->LockedDoorIdx              = DoorIdx;
-        P->LastRemoteDoorOpeningType  = (Parts.Num() >= 6)  ? appAtoi(*Parts(5))  : 0;
-        P->LastRemoteDoorPartialOpenType = (Parts.Num() >= 13) ? appAtoi(*Parts(12)) : 0;
-        P->LastRemoteDoorClosingType  = (Parts.Num() >= 14) ? appAtoi(*Parts(13)) : 0;
-        P->bLastRemoteDoorQuiet       = (Parts.Num() >= 15) ? (appAtoi(*Parts(14)) != 0) : FALSE;
-
-        FVector HandlePos(0,0,0), HandleDir(0,0,0);
-        if (Parts.Num() >= 9)
-        {
-            HandlePos.X = appAtof(*Parts(6));
-            HandlePos.Y = appAtof(*Parts(7));
-            HandlePos.Z = appAtof(*Parts(8));
-            P->LastRemoteDoorHandlePos = HandlePos;
-        }
-        if (Parts.Num() >= 12)
-        {
-            HandleDir.X = appAtof(*Parts(9));
-            HandleDir.Y = appAtof(*Parts(10));
-            HandleDir.Z = appAtof(*Parts(11));
-        }
-
-        AOLHero* Dummy = Cast<AOLHero>(P->DummyPlayer);
-        if (Dummy && !HandlePos.IsNearlyZero())
-        {
-            P->LastReceivedLoc = Dummy->Location;
-            Dummy->SetDummyDoorOpeningType(P->LastRemoteDoorOpeningType);
-            Dummy->SetDummyActiveDoor(D);
-            Dummy->StartSpecialMove((ESpecialMoveType)28, HandlePos, HandleDir);
-        }
-    }
-    if (DoorIdx != -1)
-        TC->RemoteDoorLockExpiry(DoorIdx) = 0.0f;
-}
-
-void UDoorChannel::OnDoorUnlock(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 5) return;
-    AMultiplayerController* TC = ControllerOwner;
-    if (!TC) return;
-
-    INT X = appAtoi(*Parts(2)), Y = appAtoi(*Parts(3)), Z = appAtoi(*Parts(4));
-    INT DoorIdx = -1;
-    AOLDoor* D = FindIndexedDoor(TC, X, Y, Z, DoorIdx);
-
-    if (DoorIdx != -1)
-    {
-        if (D) D->bNetDrivenMove = FALSE;
-        FLOAT Now = (GWorld && GWorld->GetWorldInfo()) ? GWorld->GetWorldInfo()->TimeSeconds : 0.0f;
-        TC->RemoteDoorLockExpiry(DoorIdx) = Now + 0.5f;
-    }
-
-    INT Idx = TC->FindRemoteIndex(SenderID);
-    if (Idx != -1)
-    {
-        TC->RemotePlayers(Idx)->LockedDoorIdx = -1;
-        AOLHero* Dummy = Cast<AOLHero>(TC->RemotePlayers(Idx)->DummyPlayer);
-        if (Dummy)
-            Dummy->SetDummyActiveDoor(NULL);
-    }
-}
-
-void UDoorChannel::OnDoorState(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 6) return;
-    AMultiplayerController* TC = ControllerOwner;
-    if (!TC) return;
-
-    FLOAT NewAngle = appAtof(*Parts(5));
-    INT X = appAtoi(*Parts(2)), Y = appAtoi(*Parts(3)), Z = appAtoi(*Parts(4));
-    INT DoorIdx = -1;
-    AOLDoor* D = FindIndexedDoor(TC, X, Y, Z, DoorIdx);
-
-    if (GMpConn.SyncInteractable && D && D->MaxOpenAngle > 0 && D->DoorState == DS_PlayerInteracting)
-        D->SetNetInteractiveAngle(NewAngle, Parts.Num() >= 7 ? appAtof(*Parts(6)) : 0.0f);
-
-    INT RemoteIdx = TC->FindRemoteIndex(SenderID);
-    if (RemoteIdx != -1)
-    {
-        AOLHero* Dummy = Cast<AOLHero>(TC->RemotePlayers(RemoteIdx)->DummyPlayer);
-        if (Dummy && D && D->MaxOpenAngle > 0)
-            Dummy->SetDoorAnimRatio(NewAngle / D->MaxOpenAngle,
-                TC->RemotePlayers(RemoteIdx)->LastRemoteDoorOpeningType);
-    }
-}
-
-void UDoorChannel::OnDoorOpen(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 5) return;
-    AMultiplayerController* TC = ControllerOwner;
-    if (!TC || !GMpConn.SyncInteractable) return;
-
-    INT DoorIdx = -1;
-    AOLDoor* D = FindIndexedDoor(TC, appAtoi(*Parts(2)), appAtoi(*Parts(3)), appAtoi(*Parts(4)), DoorIdx);
-    if (!D) return;
-
-    AOLHero* DummyUser = Cast<AOLHero>(D->DoorUser);
-    if ((D->DoorUser == NULL || (DummyUser && DummyUser->bIsDummyPawn))
-        && (D->DoorState == DS_Idle || D->DoorState == DS_PlayerInteracting))
-    {
-        D->bNetDrivenMove = TRUE;
-        D->NetReplicateOpen(D->OpeningSpeed);
-    }
-}
-
-void UDoorChannel::OnDoorClose(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 5) return;
-    AMultiplayerController* TC = ControllerOwner;
-    if (!TC || !GMpConn.SyncInteractable) return;
-
-    INT DoorIdx = -1;
-    AOLDoor* D = FindIndexedDoor(TC, appAtoi(*Parts(2)), appAtoi(*Parts(3)), appAtoi(*Parts(4)), DoorIdx);
-    if (!D) return;
-
-    AOLHero* DummyUser = Cast<AOLHero>(D->DoorUser);
-    if ((D->DoorUser == NULL || (DummyUser && DummyUser->bIsDummyPawn))
-        && (D->DoorState == DS_Idle || D->DoorState == DS_PlayerInteracting))
-    {
-        D->bNetDrivenMove = TRUE;
-        D->NetReplicateClose(D->ClosingSpeed);
-    }
-}
-
-void UDoorChannel::OnDoorAngle(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 6) return;
-    AMultiplayerController* TC = ControllerOwner;
-    if (!TC) return;
-
-    INT X = appAtoi(*Parts(2)), Y = appAtoi(*Parts(3)), Z = appAtoi(*Parts(4));
-    FLOAT Angle = appAtof(*Parts(5));
-    INT DoorIdx = -1;
-    AOLDoor* D = FindIndexedDoor(TC, X, Y, Z, DoorIdx);
-
-    if (DoorIdx != -1)
-    {
-        if (GMpConn.SyncInteractable && D && D->MaxOpenAngle > 0 && D->DoorUser == NULL)
-            D->SetNetTargetOpenRatio(Angle / D->MaxOpenAngle);
-    }
-    else
-    {
-        StorePendingDoor(TC, X, Y, Z, Angle);
-    }
-}
-
-void UDoorChannel::OnDoorParams(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 5) return;
-    AMultiplayerController* TC = ControllerOwner;
-    if (!TC) return;
-
-    INT Idx = TC->FindRemoteIndex(SenderID);
-    if (Idx != -1)
-    {
-        URemotePlayer* P = TC->RemotePlayers(Idx);
-        P->LastRemoteDoorOpeningType     = appAtoi(*Parts(2));
-        P->LastRemoteDoorPartialOpenType = appAtoi(*Parts(3));
-        P->LastRemoteDoorClosingType     = appAtoi(*Parts(4));
-        P->bLastRemoteDoorQuiet          = (Parts.Num() >= 6) ? (appAtoi(*Parts(5)) != 0) : FALSE;
-    }
-}
-
 void UDoorChannel::OnDoorDeny(INT X, INT Y, INT Z)
 {
     DoorChannel_OnDoorDeny(this, X, Y, Z);
@@ -619,7 +445,8 @@ void UDoorChannel::OnBinaryPacket(INT SenderID, BYTE PktType, BYTE* Data, INT Da
 void UDoorChannel::BroadcastDoorStates(const FString& LevelFilter)
 {
     AMultiplayerController* TC = ControllerOwner;
-    if (!TC || !GMpConn.bIsConnected || !HeroPawn) return;
+    // HeroPawn may be null on level load (called from OnLevelBecameVisible before pawn spawns)
+    if (!TC || !GMpConn.bIsConnected) return;
 
     if (!TC->bDoorsIndexed)
         TC->IndexDoors();
@@ -628,20 +455,14 @@ void UDoorChannel::BroadcastDoorStates(const FString& LevelFilter)
     {
         AOLDoor* D = Cast<AOLDoor>(TC->CachedDoors(i));
         if (!D) continue;
-        if (LevelFilter.Len() > 0 && D->GetOuter() && FString(D->GetOuter()->GetName()) != LevelFilter)
+        if (LevelFilter.Len() > 0 && FString(D->GetOutermost()->GetName()) != LevelFilter)
             continue;
 
         FLOAT Angle = D->GetOpenAngle();
-        if (Abs(Angle) > 0.5f || D->DoorState == DS_Opening || D->DoorState == DS_Closing)
-        {
-            BYTE B[DOOR_ANGLE_SIZE];
-            INT  N = 0;
-            N = PutU8 (B, N, MPKT_DOOR_ANGLE);
-            N = PutI32(B, N, appRound(D->Location.X));
-            N = PutI32(B, N, appRound(D->Location.Y));
-            N = PutI32(B, N, appRound(D->Location.Z));
-            N = PutI32(B, N, appRound(Angle * 1000.0f));
-            GMpConn.SendBinary(B, N);
-        }
+
+        // Send DOOR_INIT for every door — server stores only if no snapshot exists yet
+        // (first-write-wins). Never relay to other clients, so their state is not disturbed.
+        // The joining client receives correct state via REQUEST_DOORS after this broadcast.
+        SendDoorInit(appRound(D->Location.X), appRound(D->Location.Y), appRound(D->Location.Z), Angle);
     }
 }

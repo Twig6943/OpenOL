@@ -34,27 +34,32 @@ static INT ReadStr(const BYTE* Data, INT Off, INT DataLen, FString& OutStr)
 
 void AMultiplayerController::IndexEnemies()
 {
+    // Build a pointer set from the current cache for O(1) duplicate detection.
+    TMap<AOLEnemyPawn*, INT> CacheSet;
+    for (INT i = 0; i < CachedEnemies.Num(); i++)
+        if (CachedEnemies(i))
+            CacheSet.Set(CachedEnemies(i), i);
+
+    // Walk world actors once; add enemies not yet in the cache.
+    static const FName DummyTag(TEXT("MultiplayerDummyEnemy"));
     for (FActorIterator It; It; ++It)
     {
         AOLEnemyPawn* E = Cast<AOLEnemyPawn>(*It);
         if (!E || E->bDeleteMe || E->bPendingDelete)
             continue;
-        if (E->Tag == FName(TEXT("MultiplayerDummyEnemy")))
+        if (E->Tag == DummyTag)
+            continue;
+        if (CacheSet.Find(E))
             continue;
 
-        UBOOL bFound = FALSE;
-        for (INT i = 0; i < CachedEnemies.Num(); i++)
-            if (CachedEnemies(i) == E) { bFound = TRUE; break; }
-
-        if (!bFound)
-        {
-            CachedEnemies.AddItem(E);
-            LastEnemyAlive.AddItem(E->Health > 0);
-            LastEnemySMT.AddItem(0);
-            LastBashLoopSentTime.AddItem(0.0f);
-        }
+        CachedEnemies.AddItem(E);
+        LastEnemyAlive.AddItem(E->Health > 0);
+        LastEnemySMT.AddItem(0);
+        LastBashLoopSentTime.AddItem(0.0f);
+        CacheSet.Set(E, CachedEnemies.Num() - 1);
     }
 
+    // Purge stale (NULL) entries from the cache (back-to-front to keep indices stable).
     for (INT i = CachedEnemies.Num() - 1; i >= 0; i--)
     {
         if (!CachedEnemies(i))
@@ -462,25 +467,6 @@ void UEnemyChannel::BroadcastSpawns()
         if (!E || E->Health <= 0 || E->bDeleteMe || E->bPendingDelete) continue;
         SendSpawn(E);
     }
-}
-
-// ============================================================================
-// OnSpawn — legacy text receive (kept for PacketRouter.uc compatibility)
-// ============================================================================
-
-void UEnemyChannel::OnSpawn(const TArray<FString>& Parts, INT SenderID)
-{
-    // Superseded by OnBinaryPacket(MPKT_ENPC_SPAWN); no-op.
-}
-
-void UEnemyChannel::OnDel(const TArray<FString>& Parts, INT SenderID)
-{
-    // Superseded by OnBinaryPacket(MPKT_ENPC_DEL); no-op.
-}
-
-void UEnemyChannel::OnSmt(const TArray<FString>& Parts, INT SenderID)
-{
-    // Superseded by OnBinaryPacket(MPKT_ENPC_SMT); no-op.
 }
 
 // ============================================================================

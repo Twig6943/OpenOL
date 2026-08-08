@@ -1157,7 +1157,7 @@ function PlayFullBodyAnim
 }
 
 native function TurnOnSpot(rotator EndRotation);
-native function ApplyUniformColorOverride(LinearColor Color);
+native function ApplyUniformColorOverride(LinearColor OverrideColor);
 
 native function StartAvoid(OLEnemyPawn OtherPawn);
 

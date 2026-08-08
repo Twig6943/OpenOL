@@ -39,7 +39,6 @@ var bool                    bDoorsIndexed;
 var array<PendingDoorState> PendingDoorStates;
 var array<float>            LastSentDoorAngle;
 var array<float>            RemoteDoorLockExpiry;
-var array<float>            LastReceivedDoorAngle;
 
 // --- Pushables ---
 struct PendingPushState { var int KeyX, KeyY, KeyZ; var float Displacement; };
@@ -70,11 +69,8 @@ var array<string>           SentEnemySpawns;
 // KISMET / WORLD FLAGS
 // =============================================================================
 
-var array<name>     AmbientKismetBlacklist;
 var array<string>   TriggerActBlacklist;
 var array<string>   CSAActBlacklist;
-var array<string>   ActiveRemoteMatineePaths;
-var bool            bTriggeringRemoteEvent;
 
 // =============================================================================
 // NATIVE INTERFACE
@@ -105,11 +101,11 @@ native function NotifyDummyPlayerHit(OLHero DummyTarget, float Damage, float Kno
 native function NotifyDummyPlayerGrab(int TargetPlayerID, vector GrabTargetLoc, vector CharDir, bool bCrouched, int EnemyTypeInt, float BlendAlpha, bool bLeftAnim, int GrabType);
 native function NotifyDummyPlayerThrow(int TargetPlayerID, float ThrowRotation);
 native function NotifyDummyPlayerKill(int TargetPlayerID, int EnemyTypeInt, int WeaponType, bool bBackAnim, bool bLeftAnim, float BlendAlpha, vector AnimStart, vector CharDir, int KillType, int VictimYaw);
-native function NotifyDummyEnemySMT(OLEnemyPawn Enemy, int SMTType, int Param1, int Param2);
-native function NativeNotifyEnemyDoorOpen(OLEnemyPawn Enemy, OLDoor D, float Speed, float Angle);
-native function NativeNotifyEnemyDoorDone(OLEnemyPawn Enemy, OLDoor D, float CloseSpeed);
-native function NotifyEnemyDoorBash(OLEnemyPawn Enemy, OLDoor D, bool bReversed);
-native function NotifyEnemyDoorBreak(OLEnemyPawn Enemy, OLDoor D, bool bReversed);
+native function NotifyDummyEnemySMT(OLEnemyPawn EnemyPawn, int SMTType, int Param1, int Param2);
+native function NativeNotifyEnemyDoorOpen(OLEnemyPawn EnemyPawn, OLDoor D, float Speed, float Angle);
+native function NativeNotifyEnemyDoorDone(OLEnemyPawn EnemyPawn, OLDoor D, float CloseSpeed);
+native function NotifyEnemyDoorBash(OLEnemyPawn EnemyPawn, OLDoor D, bool bReversed);
+native function NotifyEnemyDoorBreak(OLEnemyPawn EnemyPawn, OLDoor D, bool bReversed);
 native function NotifyPawnTouchedTrigger(Actor TriggerActor);
 native function OnInventoryItemConsumed(name ItemName);
 native event  OnPickupKismetEvent(OLPickableObject Pickup);
@@ -142,8 +138,8 @@ simulated event PostBeginPlay()
 
 native function NativeDestroyed();
 
-event NotifyEnemyDoorOpen(OLEnemyPawn Enemy, OLDoor D, float Speed, float Angle) { NativeNotifyEnemyDoorOpen(Enemy, D, Speed, Angle); }
-event NotifyEnemyDoorDone(OLEnemyPawn Enemy, OLDoor D, float CloseSpeed) { NativeNotifyEnemyDoorDone(Enemy, D, CloseSpeed); }
+event NotifyEnemyDoorOpen(OLEnemyPawn EnemyPawn, OLDoor D, float Speed, float Angle) { NativeNotifyEnemyDoorOpen(EnemyPawn, D, Speed, Angle); }
+event NotifyEnemyDoorDone(OLEnemyPawn EnemyPawn, OLDoor D, float CloseSpeed) { NativeNotifyEnemyDoorDone(EnemyPawn, D, CloseSpeed); }
 
 event Destroyed()
 {
@@ -198,7 +194,15 @@ event Possess(Pawn inPawn, bool bVehicleTransition)
         if (bSentPlayerDied)
             HeroChannel.SendPlayerRespawned();
         DestroyRemoteEnemies();
+        // Broadcast all doors/pushables (empty filter = all levels, including persistent).
+        // At Possess time the world is fully loaded so FActorIterator sees everything.
+        bDoorsIndexed = false;
+        bPushablesIndexed = false;
+        DoorChannel.BroadcastDoorStates("");
+        PushableChannel.BroadcastPushableStates();
         HeroChannel.SendRequestEnemies();
+        HeroChannel.SendRequestDoors();
+        HeroChannel.SendRequestPushables();
     }
     bSentPlayerDied = false;
     Hero = OLHero(inPawn);
@@ -224,9 +228,7 @@ event StartNewGameAtCheckpoint(string CheckpointStr, bool bSaveToDisk)
     LastBashLoopSentTime.Length     = 0;
     SentEnemySpawns.Length          = 0;
     DestroyRemoteEnemies();
-    WorldChannel.SentRemoteEvents.Length = 0;
     PendingDoorStates.Length        = 0;
-    ActiveRemoteMatineePaths.Length = 0;
     bExcludeFromKismetPlayer        = false;
     bTriggerActObserver             = false;
     Super.StartNewGameAtCheckpoint(CheckpointStr, bSaveToDisk);
@@ -235,6 +237,21 @@ event StartNewGameAtCheckpoint(string CheckpointStr, bool bSaveToDisk)
 event OnPlayerDisconnected(int PlayerID)
 {
     RemoveRemotePlayer(PlayerID);
+}
+
+// Send door and pushable snapshots to the server whenever a level becomes visible.
+// This populates the server's snapshot map so newcomers receive accurate initial state.
+event OnLevelBecameVisible(string PackageName)
+{
+    if (!IsConnected())
+        return;
+    // Re-index so newly streamed-in doors/pushables are discovered, then broadcast
+    // only the doors belonging to this package (filter keeps the burst small).
+    bDoorsIndexed = false;
+    bPushablesIndexed = false;
+    DoorChannel.BroadcastDoorStates(PackageName);
+    // Pushables have no per-level filter — broadcast all (few in practice).
+    PushableChannel.BroadcastPushableStates();
 }
 
 // =============================================================================

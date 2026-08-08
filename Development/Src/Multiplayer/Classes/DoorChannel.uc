@@ -15,14 +15,7 @@ native function TickSend(float DeltaTime);
 native function OnLocalDoorOpen(OLDoor D);
 native function OnLocalDoorClose(OLDoor D);
 
-// --- Receive (called from MultiplayerController.OnReceiveData) ---
-native function OnDoorLock(array<string> Parts, int SenderID);
-native function OnDoorUnlock(array<string> Parts, int SenderID);
-native function OnDoorState(array<string> Parts, int SenderID);
-native function OnDoorOpen(array<string> Parts, int SenderID);
-native function OnDoorClose(array<string> Parts, int SenderID);
-native function OnDoorAngle(array<string> Parts, int SenderID);
-native function OnDoorParams(array<string> Parts, int SenderID);
+// --- Receive ---
 native function OnDoorDeny(int X, int Y, int Z);
 
 // --- Broadcast (called on REQUEST_STATE) ---

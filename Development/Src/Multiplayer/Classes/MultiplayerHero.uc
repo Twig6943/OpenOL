@@ -34,7 +34,8 @@ simulated event PlayFootStepSound(int FootDown, AnimNotify_Footstep footstepNoti
             return;
         LastFootstepTime = WorldInfo.TimeSeconds;
         LastFootDown = FootDown;
-        SurfaceMat = GetMaterialBelowFeet();
+        // Use surface synced from the remote player's STATE packet (collision disabled on dummy).
+        SurfaceMat = LastFootstepSurface;
         bRun = footstepNotify.bForceRunEvent || (IsRunning() && !footstepNotify.bForceWalkEvent);
         PlayDummyFootstep(bRun, SurfaceMat);
 
@@ -69,7 +70,6 @@ simulated event PlayFootStepSound(int FootDown, AnimNotify_Footstep footstepNoti
 function SendFootstep(int FootDown)
 {
     local MultiplayerController MC;
-    local name SurfaceMat;
     MC = MultiplayerController(Controller);
     if (MC == None || !MC.IsConnected())
         return;

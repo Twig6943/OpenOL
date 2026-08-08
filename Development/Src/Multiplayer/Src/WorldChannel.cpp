@@ -58,7 +58,6 @@ static void TriggerRemoteKismetEvent(AMultiplayerController* Ctrl, FName EventNa
     USequence* GameSeq = GWorld->GetWorldInfo()->GetGameSequence();
     if (!GameSeq) return;
 
-    Ctrl->bTriggeringRemoteEvent = TRUE;
     TArray<USequenceObject*> AllEvents;
     GameSeq->FindSeqObjectsByClass(USeqEvent_RemoteEvent::StaticClass(), AllEvents, TRUE);
     for (INT i = 0; i < AllEvents.Num(); i++)
@@ -67,7 +66,6 @@ static void TriggerRemoteKismetEvent(AMultiplayerController* Ctrl, FName EventNa
         if (Evt && Evt->EventName == EventName && Evt->bEnabled)
             Evt->CheckActivate(GWorld->GetWorldInfo(), NULL);
     }
-    Ctrl->bTriggeringRemoteEvent = FALSE;
 }
 
 // Fires Kismet pickup event for a pickable object found by path.
@@ -99,17 +97,36 @@ static void TriggerRemotePickupKismetEvent(AMultiplayerController* Ctrl, const F
         UObject::StaticFindObject(AOLPickableObject::StaticClass(), NULL, *PickupPath, FALSE));
     if (!Pickup) return;
 
-    Ctrl->bTriggeringRemoteEvent = TRUE;
     for (INT i = 0; i < Pickup->GeneratedEvents.Num(); i++)
     {
         UOLSeqEvent_Pickup* Evt = Cast<UOLSeqEvent_Pickup>(Pickup->GeneratedEvents(i));
         if (Evt && Evt->bEnabled)
             Evt->CheckActivate(Pickup, NULL);
     }
-    Ctrl->bTriggeringRemoteEvent = FALSE;
 }
 
 // Applies a remote touch trigger event by path.
+// Returns true if any SeqAct_Interp reachable from Op is currently playing.
+// Used to suppress duplicate remote triggers when multiple players fire the same event.
+static UBOOL IsKismetChainPlaying(USequenceOp* Op, int Depth)
+{
+    if (!Op || Depth > 16) return FALSE;
+    for (INT i = 0; i < Op->OutputLinks.Num(); i++)
+    {
+        for (INT j = 0; j < Op->OutputLinks(i).Links.Num(); j++)
+        {
+            USequenceOp* Next = Op->OutputLinks(i).Links(j).LinkedOp;
+            if (!Next) continue;
+            USeqAct_Interp* Interp = Cast<USeqAct_Interp>(Next);
+            if (Interp && Interp->bIsPlaying)
+                return TRUE;
+            if (IsKismetChainPlaying(Next, Depth + 1))
+                return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 static void ApplyRemoteTriggerAct(AMultiplayerController* Ctrl, const FString& EventPath, INT RemoteTriggerCount)
 {
     // Check blacklist
@@ -128,6 +145,12 @@ static void ApplyRemoteTriggerAct(AMultiplayerController* Ctrl, const FString& E
         TouchEvent->TriggerCount = RemoteTriggerCount;
 
     if (TouchEvent->MaxTriggerCount > 0 && TouchEvent->TriggerCount >= TouchEvent->MaxTriggerCount)
+        return;
+
+    // For repeatable triggers (MaxTriggerCount=0), suppress duplicate activations
+    // when the Kismet chain is already playing — e.g. two players touched the same
+    // trigger at the same time and both packets arrived before the chain finished.
+    if (TouchEvent->MaxTriggerCount == 0 && IsKismetChainPlaying(TouchEvent, 0))
         return;
 
     // ForceActivateTouchEvent is on AOLPlayerController
@@ -159,20 +182,6 @@ void UWorldChannel::SendPickupKismet(AOLPickableObject* Pickup)
 }
 
 // ============================================================================
-// Send — CSA activated
-// ============================================================================
-
-void UWorldChannel::SendCSA(AOLCSA* CSA)
-{
-    if (!CSA || !CanWorldSend()) return;
-    if (!GMpConn.SyncMatinees) return;
-
-    FString CSAPath = CSA->GetPathName();
-    if (ControllerOwner->CSAActBlacklist.FindItemIndex(CSAPath) != INDEX_NONE) return;
-
-    SendWorldString( MPKT_WORLD_CSA, CSAPath);
-}
-
 // ============================================================================
 // Send — inventory item consumed
 // ============================================================================
@@ -183,6 +192,50 @@ void UWorldChannel::SendItemConsume(FName ItemName)
     if (!GMpConn.SyncInteractable) return;
 
     SendWorldString( MPKT_WORLD_ITEM_CONSUME, ItemName.ToString());
+}
+
+// ============================================================================
+// Send — active matinee state (position + playrate for all playing SeqAct_Interps)
+// ============================================================================
+
+void UWorldChannel::SendMatineeState()
+{
+    if (!CanWorldSend() || !GMpConn.SyncMatinees) return;
+    if (!GWorld || !GWorld->GetGameSequence()) return;
+
+    TArray<USequenceObject*> AllMatinees;
+    GWorld->GetGameSequence()->FindSeqObjectsByClass(USeqAct_Interp::StaticClass(), AllMatinees, TRUE);
+
+    // Build packet: [0x27][count(1)] { [pathLen(1)][path ASCII][position f32][playRate f32] }
+    BYTE B[1280];
+    INT  N = 0;
+    B[N++] = MPKT_WORLD_MATINEE_STATE;
+    INT CountOffset = N++;  // placeholder for count
+    BYTE Count = 0;
+
+    for (INT i = 0; i < AllMatinees.Num() && Count < 32; i++)
+    {
+        USeqAct_Interp* Interp = Cast<USeqAct_Interp>(AllMatinees(i));
+        if (!Interp || !Interp->bIsPlaying) continue;
+
+        FString Path = Interp->GetPathName();
+        INT PathLen = Min(Path.Len(), 127);
+        if (N + 1 + PathLen + 4 + 4 > (INT)sizeof(B)) break;
+
+        B[N++] = (BYTE)PathLen;
+        for (INT c = 0; c < PathLen; c++)
+            B[N++] = (BYTE)((*Path)[c] & 0x7F);
+
+        FLOAT Pos      = Interp->Position;
+        FLOAT PlayRate = Interp->PlayRate;
+        appMemcpy(B + N, &Pos,      4); N += 4;
+        appMemcpy(B + N, &PlayRate, 4); N += 4;
+        Count++;
+    }
+
+    if (Count == 0) return;  // nothing playing — no need to send
+    B[CountOffset] = Count;
+    GMpConn.SendBinary(B, N);
 }
 
 // ============================================================================
@@ -231,13 +284,6 @@ void UWorldChannel::OnPawnTouchedTrigger(AActor* TriggerActor)
 // ============================================================================
 // Receive — nick / disconnect
 // ============================================================================
-
-void UWorldChannel::OnNick(const TArray<FString>& Parts, INT SenderID)
-{
-    // Legacy text NICK — kept for older clients.
-    if (Parts.Num() < 3) return;
-    OnBinaryNick(SenderID, Parts(2));
-}
 
 // Update persistent nick registry in GMpConn.
 static void UpdateKnownPlayer(INT PlayerID, const FString& Nick)
@@ -317,88 +363,6 @@ void UWorldChannel::OnDisconnected(const TArray<FString>& Parts, INT SenderID)
 }
 
 // ============================================================================
-// Receive — trigger / trigger act
-// ============================================================================
-
-void UWorldChannel::OnTrigger(const TArray<FString>& Parts, INT SenderID)
-{
-    // Legacy TRIGGER packet — no longer sent; kept for older clients.
-    if (Parts.Num() < 3 || !GMpConn.SyncMatinees) return;
-    TriggerRemoteKismetEvent(ControllerOwner, FName(*Parts(2)));
-}
-
-void UWorldChannel::OnTriggerAct(const TArray<FString>& Parts, INT SenderID)
-{
-    // Legacy text path — kept for older clients.
-    if (Parts.Num() < 3 || !GMpConn.SyncMatinees) return;
-    INT Count = Parts.Num() >= 4 ? appAtoi(*Parts(3)) : 0;
-    ApplyRemoteTriggerAct(ControllerOwner, Parts(2), Count);
-}
-
-void UWorldChannel::OnCSA(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 3 || !GMpConn.SyncMatinees) return;
-    const FString& CSAPath = Parts(2);
-    if (ControllerOwner->CSAActBlacklist.FindItemIndex(CSAPath) != INDEX_NONE) return;
-    AOLCSA* CSA = Cast<AOLCSA>(UObject::StaticFindObject(AOLCSA::StaticClass(), NULL, *CSAPath, FALSE));
-    if (!CSA || (CSA->MaxTriggerCount > 0 && CSA->TriggerCount >= CSA->MaxTriggerCount)) return;
-    ControllerOwner->bExcludeFromKismetPlayer = TRUE;
-    CSA->RemoteActivate(TRUE);
-}
-
-void UWorldChannel::OnItemConsume(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 3 || !GMpConn.SyncInteractable) return;
-    AOLHero* Hero = Cast<AOLHero>(ControllerOwner->Pawn);
-    if (!Hero || !Hero->OLPC || !Hero->OLPC->InventoryManager) return;
-    Hero->OLPC->InventoryManager->ConsumeItem(FName(*Parts(2)));
-}
-
-void UWorldChannel::OnLevel(const TArray<FString>& Parts, INT SenderID)
-{
-    if (!ControllerOwner->bDoorsIndexed || !ControllerOwner->bPushablesIndexed)
-    {
-        UBOOL bNewDoors = ControllerOwner->IndexDoors();
-        UBOOL bNewPush  = ControllerOwner->IndexPushables();
-        if (bNewDoors || bNewPush)
-            ControllerOwner->ApplyPendingPushStates();
-    }
-}
-
-void UWorldChannel::OnPickupState(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 5 || !GMpConn.SyncPickups) return;
-    FVector PickupLoc(appAtof(*Parts(2)), appAtof(*Parts(3)), appAtof(*Parts(4)));
-    FLOAT BestDist = 200.0f;
-    AOLPickableObject* Best = NULL;
-    for (FActorIterator It; It; ++It)
-    {
-        AOLPickableObject* P = Cast<AOLPickableObject>(*It);
-        if (!P) continue;
-        FLOAT D = FDist(P->Location, PickupLoc);
-        if (D < BestDist) { BestDist = D; Best = P; }
-    }
-    if (Best && Best->PickupMesh)
-        Best->PickupMesh->SetHiddenGame(TRUE);
-}
-
-void UWorldChannel::OnPickupKismet(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 3 || !GMpConn.SyncPickups || !GMpConn.SyncMatinees) return;
-    TriggerRemotePickupKismetEvent(ControllerOwner, Parts(2));
-}
-
-void UWorldChannel::OnRecordingMarker(const TArray<FString>& Parts, INT SenderID)
-{
-    if (Parts.Num() < 3) return;
-    AOLRecordingMarker* Marker = Cast<AOLRecordingMarker>(
-        UObject::StaticFindObject(AOLRecordingMarker::StaticClass(), NULL, *Parts(2), FALSE));
-    if (!Marker || Marker->bRecorded) return;
-    AOLPlayerController* OLPC = Cast<AOLPlayerController>(ControllerOwner);
-    if (OLPC) OLPC->NativeApplyRemoteRecording(Marker);
-}
-
-// ============================================================================
 // Receive — binary world packets
 // ============================================================================
 
@@ -418,24 +382,6 @@ void UWorldChannel::OnBinaryWorldPacket(INT SenderID, BYTE PktType, BYTE* Data, 
             INT Count = (INT)(Data[0] | (Data[1] << 8) | (Data[2] << 16) | (Data[3] << 24));
             if (ReadWorldString(Data, DataLen, 4, Str))
                 ApplyRemoteTriggerAct(ControllerOwner, Str, Count);
-        }
-        break;
-
-    case MPKT_WORLD_CSA:
-        if (ReadWorldString(Data, DataLen, 0, Str) && GMpConn.SyncMatinees)
-        {
-            AOLCSA* CSA = Cast<AOLCSA>(UObject::StaticFindObject(AOLCSA::StaticClass(), NULL, *Str, FALSE));
-            if (ControllerOwner->CSAActBlacklist.FindItemIndex(Str) == INDEX_NONE &&
-                CSA && !(CSA->MaxTriggerCount > 0 && CSA->TriggerCount >= CSA->MaxTriggerCount))
-            {
-                AOLPlayerController* OLPC = Cast<AOLPlayerController>(ControllerOwner);
-                if (OLPC)
-                {
-                    ControllerOwner->bExcludeFromKismetPlayer = TRUE;
-                    OLPC->ObserverActivateCSA(CSA, TRUE);
-                    ControllerOwner->bExcludeFromKismetPlayer = FALSE;
-                }
-            }
         }
         break;
 
@@ -488,6 +434,48 @@ void UWorldChannel::OnBinaryWorldPacket(INT SenderID, BYTE PktType, BYTE* Data, 
                 {
                     Dummy->AttachPickupMeshToDummyHand(Best);
                     TriggerRemotePickupKismetEvent(ControllerOwner, Best->GetPathName());
+                }
+            }
+        }
+        break;
+
+    case MPKT_WORLD_MATINEE_STATE:
+        if (DataLen >= 1 && GMpConn.SyncMatinees && GWorld && GWorld->GetGameSequence())
+        {
+            INT o = 0;
+            BYTE Count = Data[o++];
+            TArray<USequenceObject*> AllMatinees;
+            GWorld->GetGameSequence()->FindSeqObjectsByClass(USeqAct_Interp::StaticClass(), AllMatinees, TRUE);
+
+            for (BYTE ci = 0; ci < Count && o < DataLen; ci++)
+            {
+                INT PathLen = Data[o++];
+                if (o + PathLen + 8 > DataLen) break;
+
+                FString Path(TEXT(""));
+                for (INT c = 0; c < PathLen; c++)
+                    Path += (TCHAR)(Data[o + c] & 0x7F);
+                o += PathLen;
+
+                FLOAT Pos, PlayRate;
+                appMemcpy(&Pos,      Data + o, 4); o += 4;
+                appMemcpy(&PlayRate, Data + o, 4); o += 4;
+
+                // Find matching SeqAct_Interp by path suffix (full PathName may vary by level)
+                for (INT mi = 0; mi < AllMatinees.Num(); mi++)
+                {
+                    USeqAct_Interp* Interp = Cast<USeqAct_Interp>(AllMatinees(mi));
+                    if (!Interp) continue;
+                    if (Interp->GetPathName() != Path) continue;
+
+                    // Apply position only if not locally playing (avoid fighting local matinees)
+                    if (!Interp->bIsPlaying)
+                    {
+                        Interp->ForceStartPosition = Pos;
+                        Interp->bForceStartPos     = TRUE;
+                        Interp->PlayRate           = PlayRate;
+                    }
+                    break;
                 }
             }
         }

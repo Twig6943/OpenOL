@@ -135,12 +135,56 @@ void AMultiplayerController::OnDisconnected()
 
 void AMultiplayerController::NativeRemoveRemotePlayer(INT PlayerID)
 {
-    // TODO: C++ implementation (door state reset, dummy destroy, remote enemy cleanup)
+    INT Idx = FindRemoteIndex(PlayerID);
+    if (Idx == -1)
+        return;
+
+    URemotePlayer* P = RemotePlayers(Idx);
+
+    // Release any door this player was holding.
+    INT LockedIdx = P->LockedDoorIdx;
+    if (LockedIdx != -1 && LockedIdx < CachedDoors.Num())
+    {
+        AOLDoor* D = Cast<AOLDoor>(CachedDoors(LockedIdx));
+        if (D && D->DoorUser == NULL &&
+            (D->DoorState == DS_PlayerInteracting ||
+             D->DoorState == DS_Opening ||
+             D->DoorState == DS_Closing))
+            D->DoorState = DS_Idle;
+        if (LockedIdx < RemoteDoorLockExpiry.Num())
+            RemoteDoorLockExpiry(LockedIdx) = 0.f;
+    }
+
+    // Destroy the dummy hero pawn.
+    if (P->DummyPlayer)
+    {
+        GWorld->DestroyActor(P->DummyPlayer);
+        P->DummyPlayer = NULL;
+    }
+
+    // Destroy all dummy enemies that belonged to this player and remove from the list.
+    for (INT j = RemoteEnemies.Num() - 1; j >= 0; j--)
+    {
+        if (RemoteEnemies(j).OwnerID == PlayerID)
+        {
+            if (RemoteEnemies(j).DummyEnemy)
+                GWorld->DestroyActor(RemoteEnemies(j).DummyEnemy);
+            RemoteEnemies.Remove(j, 1);
+        }
+    }
+
+    RemotePlayers.Remove(Idx, 1);
 }
 
 void AMultiplayerController::NativeDestroyRemoteEnemies()
 {
-    // TODO: C++ implementation
+    // Destroy all remote enemy dummy actors and clear the array.
+    for (INT i = 0; i < RemoteEnemies.Num(); i++)
+    {
+        if (RemoteEnemies(i).DummyEnemy)
+            GWorld->DestroyActor(RemoteEnemies(i).DummyEnemy);
+    }
+    RemoteEnemies.Empty();
 }
 
 // ============================================================================
@@ -250,7 +294,6 @@ void AMultiplayerController::OnReceiveBinaryData(BYTE PktType, INT SenderID, BYT
         // ---- World channel ----
         case MPKT_WORLD_NICK:
         case MPKT_WORLD_TRIGGER_ACT:
-        case MPKT_WORLD_CSA:
         case MPKT_WORLD_ITEM_CONSUME:
         case MPKT_WORLD_PICKUP_KISMET:
         case MPKT_WORLD_PICKUP_STATE:
@@ -292,10 +335,9 @@ UBOOL AMultiplayerController::IndexDoors()
             NewDoors.AddItem(D);
     }
 
-    TArray<FLOAT> NewAngles, NewExpiry, NewReceivedAngles;
+    TArray<FLOAT> NewAngles, NewExpiry;
     NewAngles.AddZeroed(NewDoors.Num());
     NewExpiry.AddZeroed(NewDoors.Num());
-    NewReceivedAngles.AddZeroed(NewDoors.Num());
 
     UBOOL bAnyNew = FALSE;
     for (INT i = 0; i < NewDoors.Num(); i++)
@@ -305,26 +347,23 @@ UBOOL AMultiplayerController::IndexDoors()
         {
             if (CachedDoors(j) == NewDoors(i))
             {
-                NewAngles(i)         = LastSentDoorAngle(j);
-                NewExpiry(i)         = RemoteDoorLockExpiry(j);
-                NewReceivedAngles(i) = LastReceivedDoorAngle(j);
+                NewAngles(i) = LastSentDoorAngle(j);
+                NewExpiry(i) = RemoteDoorLockExpiry(j);
                 bFound = TRUE;
                 break;
             }
         }
         if (!bFound)
         {
-            NewAngles(i)         = -9999.0f;
-            NewReceivedAngles(i) = -1.0f;
+            NewAngles(i) = -9999.0f;
             bAnyNew = TRUE;
         }
     }
 
-    CachedDoors           = NewDoors;
-    LastSentDoorAngle     = NewAngles;
-    RemoteDoorLockExpiry  = NewExpiry;
-    LastReceivedDoorAngle = NewReceivedAngles;
-    bDoorsIndexed         = TRUE;
+    CachedDoors          = NewDoors;
+    LastSentDoorAngle    = NewAngles;
+    RemoteDoorLockExpiry = NewExpiry;
+    bDoorsIndexed        = TRUE;
     return bAnyNew;
 }
 
@@ -499,8 +538,12 @@ void AMultiplayerController::OnToggleCinematicMode(USeqAct_ToggleCinematicMode* 
 
 void AMultiplayerController::InterpolationStarted(USeqAct_Interp* InterpAction, UInterpGroupInst* GroupInst)
 {
+    if (WorldChannel && GMpConn.bIsConnected)
+        WorldChannel->SendMatineeState();
 }
 
 void AMultiplayerController::InterpolationFinished(USeqAct_Interp* InterpAction)
 {
+    if (WorldChannel && GMpConn.bIsConnected)
+        WorldChannel->SendMatineeState();
 }

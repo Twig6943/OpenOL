@@ -530,6 +530,17 @@ function SetClipboardText(string Text)
     GetOLPC().CopyToClipboard(Text);
 }
 
+function Press_OptionItemButton(int PSID)
+{
+    local OLUIFrontEnd_Multiplayer MultiScreen;
+    if (ViewStack.Length > 0)
+    {
+        MultiScreen = OLUIFrontEnd_Multiplayer(ViewStack[ViewStack.Length - 1]);
+        if (MultiScreen != None)
+            MultiScreen.Press_OptionItemButton(PSID);
+    }
+}
+
 function string GetClipboardText()
 {
     return GetOLPC().PasteFromClipboard();

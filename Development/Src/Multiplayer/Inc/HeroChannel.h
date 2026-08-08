@@ -62,6 +62,8 @@ struct FHeroStatePacket
     UBOOL    bParrying;
     FLOAT    ParryEnemyDist;
     FLOAT    ParryEnemyRelYaw;
+    // 0=None, 1=Water, 2=Blood — surface material under feet at last footstep
+    INT      FootstepSurface;
     // Optional tail — only present on first packet (len > HERO_STATE_MIN_SIZE)
     TCHAR    Nick[33];
     UBOOL    bHasNick;

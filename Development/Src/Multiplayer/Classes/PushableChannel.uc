@@ -9,9 +9,6 @@ var native OLHero          HeroPawn;
 // --- Send (tick-driven) ---
 native function TickSend(float DeltaTime);
 
-// --- Receive ---
-native function OnState(array<string> Parts, int SenderID);
-
 // --- Broadcast (called on REQUEST_STATE) ---
 native function BroadcastPushableStates();
 

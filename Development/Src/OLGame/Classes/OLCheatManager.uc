@@ -922,3 +922,19 @@ exec native function LoadDLCSoundBank(string BankName);
 exec native function SetLanguage(string LanguageCode);
 
 exec native function DingoTest(int id);
+
+exec function KillAllEnemies()
+{
+    local OLEnemyPawn E;
+
+    if (!bCheatsEnabled)
+        return;
+
+    foreach AllActors(class'OLEnemyPawn', E)
+    {
+        if (E.Tag == 'MultiplayerDummyEnemy')
+            continue;
+
+        E.Destroy();
+    }
+}

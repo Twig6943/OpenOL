@@ -84,6 +84,15 @@ void BuildStatePacket(AOLHero* Hero, UBOOL bSendingJumpGroundZ, FLOAT JumpGround
     N = PutI16(B, N,  (INT)(Hero->ParryingAnimNode ? Hero->ParryingAnimNode->EnemyDistance : -1.f));
     N = PutI16(B, N,  (INT)(Hero->ParryingAnimNode ? Hero->ParryingAnimNode->EnemyRelYaw   :  0.f));
 
+    // Footstep surface: 0=None, 1=Water, 2=Blood
+    BYTE FootSurf = 0;
+    {
+        FName Mat = Hero->LastFootstepSurface;
+        if      (Mat == Hero->WaterMaterial) FootSurf = 1;
+        else if (Mat == Hero->BloodMaterial) FootSurf = 2;
+    }
+    N = PutU8(B, N, FootSurf);
+
     // Nick tail: [nick_len(1)][nick ASCII, max 32]
     FString Nick = GMpConn.Username.Len() > 0 ? GMpConn.Username : FString(TEXT("Player"));
     if (Nick.Len() == 0) Nick = TEXT("Player");
@@ -146,6 +155,10 @@ UBOOL DecodeBinaryState(const BYTE* Data, INT DataLen, FHeroStatePacket& S)
     Off = ReadU8 (Data, Off, Parrying);
     Off = ReadI16(Data, Off, ParryDist);
     Off = ReadI16(Data, Off, ParryYaw);
+
+    INT FootSurf = 0;
+    Off = ReadU8(Data, Off, FootSurf);
+    S.FootstepSurface = FootSurf;
 
     // Optional nick tail
     S.bHasNick = FALSE;
@@ -287,6 +300,11 @@ static void ApplyHeroState(AMultiplayerController* Controller, INT Idx, const FH
         Dummy->ShadowProxyParryingAnimNode->EnemyDistance = S.ParryEnemyDist;
         Dummy->ShadowProxyParryingAnimNode->EnemyRelYaw   = S.ParryEnemyRelYaw;
     }
+
+    // Sync footstep surface so blood/water decals and particles work on dummy.
+    if      (S.FootstepSurface == 1) Dummy->LastFootstepSurface = Dummy->WaterMaterial;
+    else if (S.FootstepSurface == 2) Dummy->LastFootstepSurface = Dummy->BloodMaterial;
+    else                             Dummy->LastFootstepSurface = NAME_None;
 
     // Keep BlendByPosture in sync with bIsCrouched every tick (mirrors old UC SyncCrouchPosture call).
     Dummy->SyncCrouchPosture();
@@ -875,8 +893,7 @@ void UHeroChannel::SendPickupState(INT CurSMT)
         SendPickupLocPacket(MPKT_WORLD_PICKUP_STATE, LastPickupLoc);
 }
 
-void UHeroChannel::SendCornerPeekState(INT) {}
-void UHeroChannel::SendCornerPeekData()   {}
+void UHeroChannel::SendCornerPeekData() {}
 
 // ============================================================================
 // Send: PLAYER_HIT / PLAYER_GRAB / PLAYER_THROW / PLAYER_KILL  (binary)
@@ -1077,20 +1094,6 @@ void UHeroChannel::OnBinaryPlayerEvent(INT SenderID, BYTE* Data, INT DataLen)
     }
 }
 
-// Text-path stubs — superseded by OnBinaryPlayerEvent
-void UHeroChannel::OnHit(const TArray<FString>&, INT)   {}
-void UHeroChannel::OnGrab(const TArray<FString>&, INT)  {}
-void UHeroChannel::OnThrow(const TArray<FString>&, INT) {}
-void UHeroChannel::OnKill(const TArray<FString>&, INT)  {}
-
-// Text-path stubs — all hero packets are binary; these are never called.
-void UHeroChannel::OnLoc(const TArray<FString>&, INT)             {}
-void UHeroChannel::OnHeadRot(const TArray<FString>&, INT)         {}
-void UHeroChannel::OnMesh(const TArray<FString>&, INT)            {}
-void UHeroChannel::OnAnim(const TArray<FString>&, INT)            {}
-void UHeroChannel::OnSmt(const TArray<FString>&, INT)             {}
-void UHeroChannel::OnCornerPeek(const TArray<FString>&, INT)      {}
-void UHeroChannel::OnFootstep(const TArray<FString>&, INT)        {}
 // ============================================================================
 // Send/Receive: PLAYER_LIFECYCLE binary (Died / Respawned)
 // ============================================================================
@@ -1128,6 +1131,20 @@ void UHeroChannel::SendRequestEnemies()
 {
     if (!GMpConn.bIsHandshaked) return;
     BYTE B = MPKT_WORLD_REQUEST_ENEMIES;
+    GMpConn.SendBinary(&B, 1);
+}
+
+void UHeroChannel::SendRequestDoors()
+{
+    if (!GMpConn.bIsHandshaked) return;
+    BYTE B = MPKT_WORLD_REQUEST_DOORS;
+    GMpConn.SendBinary(&B, 1);
+}
+
+void UHeroChannel::SendRequestPushables()
+{
+    if (!GMpConn.bIsHandshaked) return;
+    BYTE B = MPKT_WORLD_REQUEST_PUSHABLES;
     GMpConn.SendBinary(&B, 1);
 }
 
@@ -1797,10 +1814,3 @@ void FHeroChannelReceiveTicker::Tick(FLOAT DeltaTime)
 }
 
 // ============================================================================
-// UC interface stubs — SMT_POS path removed; all data now in MPKT_SMT_TYPE.
-// These declarations are required by MultiplayerClasses.h (auto-generated).
-// ============================================================================
-
-void UHeroChannel::SendSpecialMovePosition(INT) {}
-void UHeroChannel::OnSmtPos(const TArray<FString>&, INT) {}
-void UHeroChannel::OnSmtPosBinary(INT, BYTE*, INT) {}

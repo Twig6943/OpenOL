@@ -80,6 +80,11 @@ public:
 
     // Initialized flag — set after first LoadConfig(); avoids re-reading ini.
 
+    // Session token (32 bytes) — received in SRV_READY, echoed as hex64 in HELLO
+    // for reliable NAT rebind slot identification.
+    BYTE SessionToken[32];
+    UBOOL bHasSessionToken;
+
     // Persistent player registry — survives map transitions.
     // Keyed by PlayerID; populated on NICK, cleared on DISCONNECT.
     struct FRemoteNick { INT PlayerID; FString Username; };
@@ -97,9 +102,11 @@ public:
         , HelloTimer(0.f), HeartbeatTimer(5.f)
         , SyncInteractable(TRUE), SyncEnemies(TRUE)
         , SyncMatinees(TRUE), SyncPickups(TRUE)
+        , bHasSessionToken(FALSE)
         , OnlineCount(0), PingTimer(5.f)
     {
         appMemzero(&ServerAddr, sizeof(ServerAddr));
+        appMemzero(SessionToken, sizeof(SessionToken));
     }
 
     // Load settings from DefaultMultiplayer.ini ([Multiplayer.MultiplayerLink]).

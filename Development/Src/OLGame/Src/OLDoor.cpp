@@ -1,5 +1,10 @@
 #include "OLGame.h"
 #include "AkAudioDevice.h"
+
+// Defined in OLPlayerController.cpp — marks all Kismet actions reachable from Op
+// as observer-only so they play back visually without triggering gameplay side-effects.
+extern void MarkChainRemoteObserver(USequenceOp* Op, int Depth);
+extern void UnmarkChainRemoteObserver(USequenceOp* Op, int Depth);
 #include "DebugRenderSceneProxy.h"
 #include "EngineAnimClasses.h"
 #include "UDKBaseAnimationClasses.h"
@@ -383,6 +388,20 @@ void AOLDoor::TriggerBreakDoorCameraShake()
 
 void AOLDoor::TriggerEvent(BYTE eventType, AOLPawn* instigator)
 {
+	// When the door is being driven by a remote player (bNetDrivenMove), mark all
+	// reachable Kismet chains as observer-only so Matinees play visually without
+	// re-triggering gameplay side-effects (spawns, game state changes, etc.).
+	const UBOOL bRemoteDriven = bNetDrivenMove || bRemoteTrigger;
+	if (bRemoteDriven)
+	{
+		for (INT i = 0; i < GeneratedEvents.Num(); i++)
+		{
+			UOLSeqEvent_Door* doorEvent = Cast<UOLSeqEvent_Door>(GeneratedEvents(i));
+			if (doorEvent && doorEvent->bEnabled)
+				MarkChainRemoteObserver(doorEvent, 0);
+		}
+	}
+
 	for (INT i = 0; i < GeneratedEvents.Num(); i++)
 	{
 		UOLSeqEvent_Door* doorEvent = Cast<UOLSeqEvent_Door>(GeneratedEvents(i));
@@ -392,6 +411,18 @@ void AOLDoor::TriggerEvent(BYTE eventType, AOLPawn* instigator)
 			TArray<INT> indices;
 			indices.AddItem((DoorEventType)eventType);
 			doorEvent->CheckActivate(this, instigator, FALSE, &indices);
+		}
+	}
+
+	// Clear observer-only flags on the chain nodes so future local triggers
+	// on this door are not affected.
+	if (bRemoteDriven)
+	{
+		for (INT i = 0; i < GeneratedEvents.Num(); i++)
+		{
+			UOLSeqEvent_Door* doorEvent = Cast<UOLSeqEvent_Door>(GeneratedEvents(i));
+			if (doorEvent)
+				UnmarkChainRemoteObserver(doorEvent, 0);
 		}
 	}
 
@@ -489,8 +520,8 @@ UBOOL AOLDoor::Tick(FLOAT deltaTime, ELevelTick tickType)
 
 			if (DoorState == DS_Closing && bPreciseCloseTiming)
 			{
-				check(PreciseCloseDuration > 0.0f);
-				newRatio = 1.0f - Saturate(((GWorld->GetTimeSeconds() + deltaTime) - PreciseCloseStartTime) / PreciseCloseDuration);
+				if (PreciseCloseDuration <= 0.0f) { bPreciseCloseTiming = FALSE; }
+				else newRatio = 1.0f - Saturate(((GWorld->GetTimeSeconds() + deltaTime) - PreciseCloseStartTime) / PreciseCloseDuration);
 			}
 			else
 			{
@@ -802,7 +833,8 @@ void AOLDoor::Open(AOLPawn* instigator, FLOAT rotationSpeed, FLOAT targetAngle, 
 
 void AOLDoor::CloseQuiet(class AOLPawn* instigator, FLOAT closeStartTime, FLOAT closeDuration)
 {
-	check(closeDuration > 0.0f);
+	if (closeDuration <= 0.0f)
+		return;
 
 	Close(instigator, (95.0f / closeDuration), CST_Quiet);
 
@@ -1959,8 +1991,8 @@ void AOLDoor::NotifyHandlesToWait()
 							UObject* InterfaceImplementor = Interface->GetUObjectInterfaceInterface_NavigationHandle();
 							if(InterfaceImplementor != NULL && !InterfaceImplementor->HasAnyFlags(RF_Unreachable))
 							{
-								AOLBot* Bot = CastChecked<AOLBot>(InterfaceImplementor);
-								if (Bot->Location.DistanceSquared(GetCenterLocation()) < Square(300.0f))
+								AOLBot* Bot = Cast<AOLBot>(InterfaceImplementor);
+								if (Bot && Bot->Location.DistanceSquared(GetCenterLocation()) < Square(300.0f))
 								{
 									Bot->eventStartWaitForDoor();
 								}

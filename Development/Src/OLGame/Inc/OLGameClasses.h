@@ -5147,6 +5147,7 @@ public:
     FLOAT MovingNoiseRate;
     FName WaterMaterial;
     FName BloodMaterial;
+    FName LastFootstepSurface;
     class UForceFeedbackWaveform* BigLandingFFWaveform;
     class UForceFeedbackWaveform* SmallLandingFFWaveform;
     class UForceFeedbackWaveform* PickupFFWaveform;
@@ -6764,7 +6765,7 @@ struct OLPlayerController_eventOnLevelBecameVisible_Parms
 };
 struct OLPlayerController_eventNotifyEnemyDoorBreak_Parms
 {
-    class AOLEnemyPawn* Enemy;
+    class AOLEnemyPawn* EnemyPawn;
     class AOLDoor* D;
     UBOOL bReversed;
     OLPlayerController_eventNotifyEnemyDoorBreak_Parms(EEventParm)
@@ -6773,7 +6774,7 @@ struct OLPlayerController_eventNotifyEnemyDoorBreak_Parms
 };
 struct OLPlayerController_eventNotifyEnemyDoorBash_Parms
 {
-    class AOLEnemyPawn* Enemy;
+    class AOLEnemyPawn* EnemyPawn;
     class AOLDoor* D;
     UBOOL bReversed;
     OLPlayerController_eventNotifyEnemyDoorBash_Parms(EEventParm)
@@ -6782,7 +6783,7 @@ struct OLPlayerController_eventNotifyEnemyDoorBash_Parms
 };
 struct OLPlayerController_eventNotifyEnemyDoorDone_Parms
 {
-    class AOLEnemyPawn* Enemy;
+    class AOLEnemyPawn* EnemyPawn;
     class AOLDoor* D;
     FLOAT CloseSpeed;
     OLPlayerController_eventNotifyEnemyDoorDone_Parms(EEventParm)
@@ -6791,7 +6792,7 @@ struct OLPlayerController_eventNotifyEnemyDoorDone_Parms
 };
 struct OLPlayerController_eventNotifyEnemyDoorOpen_Parms
 {
-    class AOLEnemyPawn* Enemy;
+    class AOLEnemyPawn* EnemyPawn;
     class AOLDoor* D;
     FLOAT Speed;
     FLOAT Angle;
@@ -7053,6 +7054,8 @@ public:
     virtual void SetAstoundSoundEnabled(UBOOL bEnabled);
     virtual void NativeOnControllerChanged(INT ControllerId,UBOOL bIsConnected);
     virtual void NativeApplyRemoteRecording(class AOLRecordingMarker* Marker);
+    virtual FString NativeBuildInviteLink(const FString& IP,const FString& Port,const FString& Room,const FString& Pass);
+    virtual UBOOL NativeParseInviteLink(const FString& Link,FString& OutIP,FString& OutPort,FString& OutRoom,FString& OutPass);
     DECLARE_FUNCTION(execNativePlayerMove)
     {
         P_GET_FLOAT(DeltaTime);
@@ -7188,40 +7191,59 @@ public:
         P_FINISH;
         this->NativeApplyRemoteRecording(Marker);
     }
+    DECLARE_FUNCTION(execNativeBuildInviteLink)
+    {
+        P_GET_STR(IP);
+        P_GET_STR(Port);
+        P_GET_STR(Room);
+        P_GET_STR(Pass);
+        P_FINISH;
+        *(FString*)Result=this->NativeBuildInviteLink(IP,Port,Room,Pass);
+    }
+    DECLARE_FUNCTION(execNativeParseInviteLink)
+    {
+        P_GET_STR(Link);
+        P_GET_STR_REF(OutIP);
+        P_GET_STR_REF(OutPort);
+        P_GET_STR_REF(OutRoom);
+        P_GET_STR_REF(OutPass);
+        P_FINISH;
+        *(UBOOL*)Result=this->NativeParseInviteLink(Link,OutIP,OutPort,OutRoom,OutPass);
+    }
     void eventOnLevelBecameVisible(const FString& PackageName)
     {
         OLPlayerController_eventOnLevelBecameVisible_Parms Parms(EC_EventParm);
         Parms.PackageName=PackageName;
         ProcessEvent(FindFunctionChecked(OLGAME_OnLevelBecameVisible),&Parms);
     }
-    void eventNotifyEnemyDoorBreak(class AOLEnemyPawn* Enemy,class AOLDoor* D,UBOOL bReversed)
+    void eventNotifyEnemyDoorBreak(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,UBOOL bReversed)
     {
         OLPlayerController_eventNotifyEnemyDoorBreak_Parms Parms(EC_EventParm);
-        Parms.Enemy=Enemy;
+        Parms.EnemyPawn=EnemyPawn;
         Parms.D=D;
         Parms.bReversed=bReversed ? FIRST_BITFIELD : FALSE;
         ProcessEvent(FindFunctionChecked(OLGAME_NotifyEnemyDoorBreak),&Parms);
     }
-    void eventNotifyEnemyDoorBash(class AOLEnemyPawn* Enemy,class AOLDoor* D,UBOOL bReversed)
+    void eventNotifyEnemyDoorBash(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,UBOOL bReversed)
     {
         OLPlayerController_eventNotifyEnemyDoorBash_Parms Parms(EC_EventParm);
-        Parms.Enemy=Enemy;
+        Parms.EnemyPawn=EnemyPawn;
         Parms.D=D;
         Parms.bReversed=bReversed ? FIRST_BITFIELD : FALSE;
         ProcessEvent(FindFunctionChecked(OLGAME_NotifyEnemyDoorBash),&Parms);
     }
-    void eventNotifyEnemyDoorDone(class AOLEnemyPawn* Enemy,class AOLDoor* D,FLOAT CloseSpeed)
+    void eventNotifyEnemyDoorDone(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,FLOAT CloseSpeed)
     {
         OLPlayerController_eventNotifyEnemyDoorDone_Parms Parms(EC_EventParm);
-        Parms.Enemy=Enemy;
+        Parms.EnemyPawn=EnemyPawn;
         Parms.D=D;
         Parms.CloseSpeed=CloseSpeed;
         ProcessEvent(FindFunctionChecked(OLGAME_NotifyEnemyDoorDone),&Parms);
     }
-    void eventNotifyEnemyDoorOpen(class AOLEnemyPawn* Enemy,class AOLDoor* D,FLOAT Speed,FLOAT Angle)
+    void eventNotifyEnemyDoorOpen(class AOLEnemyPawn* EnemyPawn,class AOLDoor* D,FLOAT Speed,FLOAT Angle)
     {
         OLPlayerController_eventNotifyEnemyDoorOpen_Parms Parms(EC_EventParm);
-        Parms.Enemy=Enemy;
+        Parms.EnemyPawn=EnemyPawn;
         Parms.D=D;
         Parms.Speed=Speed;
         Parms.Angle=Angle;
@@ -8633,6 +8655,8 @@ AUTOGENERATE_FUNCTION(AOLHero,-1,execGetViewRotation);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execGetPawnViewLocation);
 AUTOGENERATE_FUNCTION(AOLCollectiblePickup,-1,execShouldShowCollectible);
 AUTOGENERATE_FUNCTION(AOLGameplayItemPickup,-1,execShouldShowItem);
+AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeParseInviteLink);
+AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeBuildInviteLink);
 AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeApplyRemoteRecording);
 AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeOnControllerChanged);
 AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execSetAstoundSoundEnabled);
@@ -9147,6 +9171,8 @@ FNativeFunctionLookup GOLGameAOLGameplayItemPickupNatives[] =
 
 FNativeFunctionLookup GOLGameAOLPlayerControllerNatives[] = 
 { 
+	MAP_NATIVE(AOLPlayerController, execNativeParseInviteLink)
+	MAP_NATIVE(AOLPlayerController, execNativeBuildInviteLink)
 	MAP_NATIVE(AOLPlayerController, execNativeApplyRemoteRecording)
 	MAP_NATIVE(AOLPlayerController, execNativeOnControllerChanged)
 	MAP_NATIVE(AOLPlayerController, execSetAstoundSoundEnabled)

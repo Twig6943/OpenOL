@@ -249,7 +249,8 @@ static const TCHAR* ShowLaunchModeDialog( const TCHAR* CmdLine )
 		|| ParseParam(CmdLine, TEXT("SEEKFREELOADINGPCCONSOLE"))
 		|| ParseParam(CmdLine, TEXT("EDITOR"))
 		|| ParseParam(CmdLine, TEXT("SERVER"))
-		|| ParseParam(CmdLine, TEXT("SILENT")) )
+		|| ParseParam(CmdLine, TEXT("SILENT"))
+		|| ParseParam(CmdLine, TEXT("INSTALLED")) )
 	{
 		return CmdLine;
 	}

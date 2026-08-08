@@ -198,7 +198,7 @@ void FMpConnection::OnReceivedData(FIpAddr SrcAddr, BYTE* Data, INT Count)
                             ((DWORD)Payload[2]<<16) | ((DWORD)Payload[3]<<24));
             LocalPlayerID = PID;
 
-            // Parse server name from payload: [player_id LE4][name_len(1)][name ASCII]
+            // Parse server name from payload: [player_id LE4][name_len(1)][name...][token(32)]
             if (PayloadLen >= 5)
             {
                 BYTE NLen = Payload[4];
@@ -207,6 +207,14 @@ void FMpConnection::OnReceivedData(FIpAddr SrcAddr, BYTE* Data, INT Count)
                 for (INT i = 0; i < NBytes && i < 255; i++)
                     TmpName[i] = (TCHAR)Payload[5 + i];
                 ServerName = FString(TmpName);
+
+                // Parse session token appended after name (32 bytes)
+                INT TokenOffset = 5 + NBytes;
+                if (PayloadLen >= TokenOffset + 32)
+                {
+                    appMemcpy(SessionToken, Payload + TokenOffset, 32);
+                    bHasSessionToken = TRUE;
+                }
             }
             else
             {
@@ -307,8 +315,24 @@ void FMpConnection::Tick(FLOAT DeltaTime)
         if (HelloTimer <= 0.f)
         {
             HelloTimer = 2.0f;
-            // Send text HELLO
-            FString Msg = FString::Printf(TEXT("HELLO,%s,%s\n"), *RoomCode, *Password);
+            // Build HELLO: include session token (hex64) if we have one for NAT rebind
+            FString Msg;
+            if (bHasSessionToken)
+            {
+                // Encode 32-byte token as 64 lowercase hex chars
+                TCHAR HexToken[65] = {0};
+                const TCHAR HexChars[] = TEXT("0123456789abcdef");
+                for (INT i = 0; i < 32; i++)
+                {
+                    HexToken[i * 2]     = HexChars[(SessionToken[i] >> 4) & 0xF];
+                    HexToken[i * 2 + 1] = HexChars[SessionToken[i] & 0xF];
+                }
+                Msg = FString::Printf(TEXT("HELLO,%s,%s,%s\n"), *RoomCode, *Password, HexToken);
+            }
+            else
+            {
+                Msg = FString::Printf(TEXT("HELLO,%s,%s\n"), *RoomCode, *Password);
+            }
             FTCHARToANSI Conv(*Msg);
             SendTo(ServerAddr, (BYTE*)(ANSICHAR*)Conv, Conv.Length());
         }

@@ -1486,12 +1486,12 @@ function NotifyDummyPlayerThrow(int TargetPlayerID, float ThrowRotation) {}
 // KillType: 0=SMT_HeroKilled, 1=SMT_HeroDecapitate
 function NotifyDummyPlayerKill(int TargetPlayerID, int EnemyTypeInt, int WeaponType, bool bBackAnim, bool bLeftAnim, float BlendAlpha, vector AnimStart, vector CharDir, int KillType, int VictimYaw) {}
 
-function NotifyDummyEnemySMT(OLEnemyPawn Enemy, int SMTType, int Param1, int Param2) {}
+function NotifyDummyEnemySMT(OLEnemyPawn EnemyPawn, int SMTType, int Param1, int Param2) {}
 
-event NotifyEnemyDoorOpen(OLEnemyPawn Enemy, OLDoor D, float Speed, float Angle) {}
-event NotifyEnemyDoorDone(OLEnemyPawn Enemy, OLDoor D, float CloseSpeed) {}
-event NotifyEnemyDoorBash(OLEnemyPawn Enemy, OLDoor D, bool bReversed) {}
-event NotifyEnemyDoorBreak(OLEnemyPawn Enemy, OLDoor D, bool bReversed) {}
+event NotifyEnemyDoorOpen(OLEnemyPawn EnemyPawn, OLDoor D, float Speed, float Angle) {}
+event NotifyEnemyDoorDone(OLEnemyPawn EnemyPawn, OLDoor D, float CloseSpeed) {}
+event NotifyEnemyDoorBash(OLEnemyPawn EnemyPawn, OLDoor D, bool bReversed) {}
+event NotifyEnemyDoorBreak(OLEnemyPawn EnemyPawn, OLDoor D, bool bReversed) {}
 
 // Called by OLPawn when the local player physically touches an actor with Kismet touch events.
 // Overridden in MultiplayerController to send TRIGGER_ACT to remote.
@@ -1522,6 +1522,11 @@ function bool   GetNetSyncInteractable() { return class'OLNetworkConfig'.default
 function bool   GetNetSyncEnemies()      { return class'OLNetworkConfig'.default.SyncEnemies; }
 function bool   GetNetSyncMatinees()     { return class'OLNetworkConfig'.default.SyncMatinees; }
 function bool   GetNetSyncPickups()      { return class'OLNetworkConfig'.default.SyncPickups; }
+
+// Builds openol://ip:port?room=CODE[&password=SECRET]
+native function string NativeBuildInviteLink(string IP, string Port, string Room, string Pass);
+// Parses openol://ip:port?room=CODE[&password=SECRET]; returns false if not a valid link
+native function bool NativeParseInviteLink(string Link, out string OutIP, out string OutPort, out string OutRoom, out string OutPass);
 
 event OnLevelBecameVisible(string PackageName) {}
 

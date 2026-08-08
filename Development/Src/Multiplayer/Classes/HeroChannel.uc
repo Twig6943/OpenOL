@@ -19,10 +19,8 @@ native function SendHeadRotation();
 native function SendMesh();
 native function SendCinematicAnimation();
 native function SendSpecialMoveType();
-native function SendSpecialMovePosition(int SMT);
 native function SendPickupStart(int CurSMT);
 native function SendPickupState(int CurSMT);
-native function SendCornerPeekState(int CurSMT);
 native function SendCornerPeekData();
 
 // --- Send: combat (event-driven) ---
@@ -32,16 +30,7 @@ native function SendPlayerThrow(int TargetPlayerID, float ThrowRotation);
 native function SendPlayerKill(int TargetPlayerID, int EnemyTypeInt, int WeaponType, bool bBackAnim, bool bLeftAnim, float BlendAlpha, vector AnimStart, vector CharDir, int KillType, int VictimYaw);
 
 // --- Receive: state ---
-native function OnLoc(array<string> Parts, int SenderID);
-native function OnHeadRot(array<string> Parts, int SenderID);
-native function OnMesh(array<string> Parts, int SenderID);
-native function OnAnim(array<string> Parts, int SenderID);
-native function OnSmt(array<string> Parts, int SenderID);
-native function OnSmtPos(array<string> Parts, int SenderID);
-native function OnCornerPeek(array<string> Parts, int SenderID);
-native function OnFootstep(array<string> Parts, int SenderID);
 native function OnBinaryLoc(int SenderID, out byte Data[255], int DataLen);
-native function OnSmtPosBinary(int SenderID, out byte Data[255], int DataLen);
 native function OnBinaryHeadRot(int SenderID, out byte Data[255], int DataLen);
 native function OnBinaryMesh(int SenderID, out byte Data[255], int DataLen);
 native function OnBinaryCinematicAnim(int SenderID, out byte Data[255], int DataLen);
@@ -53,15 +42,13 @@ native function ApplyCamcorderState(int Idx, OLHero Dummy, int NewCamcorderState
 native function ApplySpecialMoveTransition(int Idx, OLHero Dummy, int NewSpecialMove);
 native function ApplyLocomotionMode(int Idx, OLHero Dummy, int NewLocomotionMode);
 
-// --- Receive: combat ---
-native function OnHit(array<string> Parts, int SenderID);
-native function OnGrab(array<string> Parts, int SenderID);
-native function OnThrow(array<string> Parts, int SenderID);
-native function OnKill(array<string> Parts, int SenderID);
+// --- Receive: combat (binary) ---
 native function SendPlayerDied();
 native function SendPlayerRespawned();
 native function SendDisconnect();
 native function SendRequestEnemies();
+native function SendRequestDoors();
+native function SendRequestPushables();
 native function OnBinaryPlayerLifecycle(int SenderID, out byte Data[255], int DataLen);
 
 DefaultProperties

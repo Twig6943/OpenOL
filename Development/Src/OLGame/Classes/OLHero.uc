@@ -726,6 +726,8 @@ var const float MovingNoiseRate;
 
 var const name WaterMaterial;
 var const name BloodMaterial;
+// Surface material detected at the last footstep (updated each step, read by multiplayer to sync dummy decals).
+var name LastFootstepSurface;
 
 var const ForceFeedbackWaveform BigLandingFFWaveform;
 var const ForceFeedbackWaveform SmallLandingFFWaveform;
@@ -1430,6 +1432,7 @@ simulated event PlayFootStepSound(int FootDown, AnimNotify_Footstep footstepNoti
 		LastFootDown = FootDown;
 
 		SurfaceMat = GetMaterialBelowFeet();
+		LastFootstepSurface = SurfaceMat;
 		SetSwitch(FloorMaterialGroup, SurfaceMat);
 
 		if (footstepNotify.bForceRunEvent || (IsRunning() && !footstepNotify.bForceWalkEvent))

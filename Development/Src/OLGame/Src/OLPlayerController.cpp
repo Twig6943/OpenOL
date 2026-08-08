@@ -1486,7 +1486,7 @@ void AOLPlayerController::SetPlayerFoundWhileHidden(AOLEnemyPawn* searchingEnemy
 	}
 }
 
-static void MarkChainRemoteObserver(USequenceOp* Op, int Depth)
+void MarkChainRemoteObserver(USequenceOp* Op, int Depth)
 {
 	if (!Op || Depth > 16)
 		return;
@@ -1519,6 +1519,37 @@ static void MarkChainRemoteObserver(USequenceOp* Op, int Depth)
 				Struggle->bObserverOnly = TRUE;
 			}
 			MarkChainRemoteObserver(Next, Depth + 1);
+		}
+	}
+}
+
+void UnmarkChainRemoteObserver(USequenceOp* Op, int Depth)
+{
+	if (!Op || Depth > 16)
+		return;
+	for (INT i = 0; i < Op->OutputLinks.Num(); i++)
+	{
+		for (INT j = 0; j < Op->OutputLinks(i).Links.Num(); j++)
+		{
+			USequenceOp* Next = Op->OutputLinks(i).Links(j).LinkedOp;
+			if (!Next)
+				continue;
+			USeqAct_Interp* Interp = Cast<USeqAct_Interp>(Next);
+			USeqAct_ToggleCinematicMode* CinMode = Cast<USeqAct_ToggleCinematicMode>(Next);
+			USeqAct_ActorFactory* ActorFactory = Cast<USeqAct_ActorFactory>(Next);
+			UOLSeqAct_Struggle* Struggle = Cast<UOLSeqAct_Struggle>(Next);
+			if (Interp)
+			{
+				Interp->bRemoteObserverMatinee = FALSE;
+				Interp->bObserverOnly = FALSE;
+			}
+			if (CinMode)
+				CinMode->bObserverOnly = FALSE;
+			if (ActorFactory)
+				ActorFactory->bObserverOnly = FALSE;
+			if (Struggle)
+				Struggle->bObserverOnly = FALSE;
+			UnmarkChainRemoteObserver(Next, Depth + 1);
 		}
 	}
 }
@@ -2861,6 +2892,63 @@ void AOLPlayerController::ProcessFreeCam(FLOAT deltaSeconds)
 		HeroPawn->SetLocation(DebugCamPos - FVector(0, 0, 165.0f));
 		HeroPawn->SetRotation(DebugCamRot);
 	}
+}
+
+FString AOLPlayerController::NativeBuildInviteLink(const FString& IP, const FString& Port, const FString& Room, const FString& Pass)
+{
+    FString Link = FString::Printf(TEXT("openol://%s:%s?room=%s"), *IP, *Port, *Room);
+    if (Pass.Len() > 0)
+        Link += FString::Printf(TEXT("&password=%s"), *Pass);
+    return Link;
+}
+
+UBOOL AOLPlayerController::NativeParseInviteLink(const FString& Link, FString& OutIP, FString& OutPort, FString& OutRoom, FString& OutPass)
+{
+    if (!Link.StartsWith(TEXT("openol://")))
+        return FALSE;
+
+    FString Body = Link.Mid(9);
+
+    FString Host, Query;
+    if (!Body.Split(TEXT("?"), &Host, &Query))
+        Host = Body;
+
+    FString LocalIP, LocalPort;
+    if (Host.Split(TEXT(":"), &LocalIP, &LocalPort))
+    {
+        OutIP   = LocalIP;
+        OutPort = LocalPort;
+    }
+    else
+    {
+        OutIP = Host;
+    }
+
+    FString Remaining = Query;
+    while (Remaining.Len() > 0)
+    {
+        FString Pair, Rest;
+        if (!Remaining.Split(TEXT("&"), &Pair, &Rest))
+        {
+            Pair      = Remaining;
+            Remaining = TEXT("");
+        }
+        else
+        {
+            Remaining = Rest;
+        }
+
+        FString Key, Val;
+        if (!Pair.Split(TEXT("="), &Key, &Val))
+            continue;
+
+        if (Key == TEXT("room"))
+            OutRoom = Val;
+        else if (Key == TEXT("password"))
+            OutPass = Val;
+    }
+
+    return TRUE;
 }
 
 void AOLPlayerController::DrawDebug()

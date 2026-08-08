@@ -18,9 +18,6 @@ native function SendAllDeletes();
 native function BroadcastSpawns();
 
 // --- Receive ---
-native function OnSpawn(array<string> Parts, int SenderID);
-native function OnDel(array<string> Parts, int SenderID);
-native function OnSmt(array<string> Parts, int SenderID);
 native function OnRequestEnemies(int SenderID);
 native function OnBinaryLoc(int SenderID, byte Data[255], int DataLen);
 native function OnBinaryPacket(int SenderID, byte PktType, byte Data[255], int DataLen);
