@@ -611,7 +611,7 @@ void UHeroChannel::ApplyLocomotionMode(INT Idx, AOLHero* Dummy, INT NewLocomotio
     default:
         Dummy->SetDummyLocomotionMode(LM_Walk);
         if (OldLM == LM_Pushing || OldLM == LM_Cinematic)
-            Dummy->ClearShadowIdleAnim();
+            Dummy->ClearFullBodyIdleAnim();
         break;
     }
 }
@@ -1357,7 +1357,7 @@ void UHeroChannel::OnBinaryCinematicAnim(INT SenderID, BYTE* Data, INT DataLen)
     BYTE bStop = Data[0];
     if (bStop)
     {
-        Dummy->ClearShadowIdleAnim();
+        Dummy->ClearFullBodyIdleAnim();
         return;
     }
 
@@ -1402,7 +1402,7 @@ void UHeroChannel::OnBinaryCinematicAnim(INT SenderID, BYTE* Data, INT DataLen)
     // Stop previous cinematic anim (fires looping sound stop-events like Wheelchair_LOOP_STOP)
     // before starting the new one, so sounds from the outgoing anim are properly cleaned up.
     if (Dummy->FullBodyAnimSlot && Dummy->FullBodyAnimSlot->bIsPlayingCustomAnim)
-        Dummy->ClearShadowIdleAnim();
+        Dummy->ClearFullBodyIdleAnim();
 
     Dummy->PlayCinematicDummyAnim(AnimName, 1.f, 0.2f, 0.2f);
 }

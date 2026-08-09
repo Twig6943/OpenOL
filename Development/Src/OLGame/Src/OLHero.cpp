@@ -11491,7 +11491,7 @@ void AOLHero::PlayCinematicDummyAnim(FName AnimName, FLOAT Rate, FLOAT BlendIn, 
     FullBodyAnimSlot->PlayCustomAnim(AnimName, Rate, BlendIn, BlendOut, TRUE, FALSE);
 }
 
-void AOLHero::SetShadowIdleAnim(FName AnimName, FLOAT Rate)
+void AOLHero::SetFullBodyIdleAnim(FName AnimName, FLOAT Rate)
 {
     if (!FullBodyAnimSlot)
         return;
@@ -11507,7 +11507,7 @@ void AOLHero::SetShadowIdleAnim(FName AnimName, FLOAT Rate)
     FullBodyAnimSlot->PlayCustomAnim(AnimName, Rate, 0.2f, 0.0f, TRUE, FALSE);
 }
 
-void AOLHero::ClearShadowIdleAnim()
+void AOLHero::ClearFullBodyIdleAnim()
 {
     if (!FullBodyAnimSlot)
         return;

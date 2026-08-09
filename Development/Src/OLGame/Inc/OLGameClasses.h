@@ -5609,8 +5609,8 @@ public:
     virtual void SyncCrouchPosture();
     virtual void PlayShadowOnlyAnim(FName AnimName,FLOAT Rate,FLOAT BlendIn,FLOAT BlendOut,UBOOL bLooping=FALSE);
     virtual void PlayCinematicDummyAnim(FName AnimName,FLOAT Rate,FLOAT BlendIn,FLOAT BlendOut);
-    virtual void SetShadowIdleAnim(FName AnimName,FLOAT Rate);
-    virtual void ClearShadowIdleAnim();
+    virtual void SetFullBodyIdleAnim(FName AnimName,FLOAT Rate);
+    virtual void ClearFullBodyIdleAnim();
     virtual void ResetDummyAnimState();
     virtual void SetDummyLocomotionMode(INT NewMode);
     virtual void PlayDummySMTAnim(INT SMTType);
@@ -5802,17 +5802,17 @@ public:
         P_FINISH;
         this->PlayCinematicDummyAnim(AnimName,Rate,BlendIn,BlendOut);
     }
-    DECLARE_FUNCTION(execSetShadowIdleAnim)
+    DECLARE_FUNCTION(execSetFullBodyIdleAnim)
     {
         P_GET_NAME(AnimName);
         P_GET_FLOAT(Rate);
         P_FINISH;
-        this->SetShadowIdleAnim(AnimName,Rate);
+        this->SetFullBodyIdleAnim(AnimName,Rate);
     }
-    DECLARE_FUNCTION(execClearShadowIdleAnim)
+    DECLARE_FUNCTION(execClearFullBodyIdleAnim)
     {
         P_FINISH;
-        this->ClearShadowIdleAnim();
+        this->ClearFullBodyIdleAnim();
     }
     DECLARE_FUNCTION(execResetDummyAnimState)
     {
@@ -8636,8 +8636,8 @@ AUTOGENERATE_FUNCTION(AOLHero,-1,execInitDummyMesh);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execPlayDummySMTAnim);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execSetDummyLocomotionMode);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execResetDummyAnimState);
-AUTOGENERATE_FUNCTION(AOLHero,-1,execClearShadowIdleAnim);
-AUTOGENERATE_FUNCTION(AOLHero,-1,execSetShadowIdleAnim);
+AUTOGENERATE_FUNCTION(AOLHero,-1,execClearFullBodyIdleAnim);
+AUTOGENERATE_FUNCTION(AOLHero,-1,execSetFullBodyIdleAnim);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execPlayCinematicDummyAnim);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execPlayShadowOnlyAnim);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execSyncCrouchPosture);
@@ -9137,8 +9137,8 @@ FNativeFunctionLookup GOLGameAOLHeroNatives[] =
 	MAP_NATIVE(AOLHero, execPlayDummySMTAnim)
 	MAP_NATIVE(AOLHero, execSetDummyLocomotionMode)
 	MAP_NATIVE(AOLHero, execResetDummyAnimState)
-	MAP_NATIVE(AOLHero, execClearShadowIdleAnim)
-	MAP_NATIVE(AOLHero, execSetShadowIdleAnim)
+	MAP_NATIVE(AOLHero, execClearFullBodyIdleAnim)
+	MAP_NATIVE(AOLHero, execSetFullBodyIdleAnim)
 	MAP_NATIVE(AOLHero, execPlayCinematicDummyAnim)
 	MAP_NATIVE(AOLHero, execPlayShadowOnlyAnim)
 	MAP_NATIVE(AOLHero, execSyncCrouchPosture)
