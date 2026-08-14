@@ -2,7 +2,7 @@
 
 # Disclaimer: Make sure the `$WINEPREFIX` you're using is as same as the one in [build_wine.sh](../Src/Targets/build_wine.sh)
 
-### Install visual studio 2012
+### 1.Install visual studio 2012
 
 Wine version confirmed to work: 11.14
 
@@ -16,6 +16,13 @@ Run ` sudo pkill -9 -f "\\.exe" ` if visual studio asks for some sort of restart
 
 Pick only;
 - Microsoft Foundation Classes for C++
+
+### 2. Install DirectX SDK
+
+This one is straight forward just run the installer in the same prefix.
+
+### 3. Building
+Cd into `$OUTLASTSRC/Development/Src/Targets` and run `build_wine.sh`
 
 // Troubleshooting (WIP ERROR FIX)
 

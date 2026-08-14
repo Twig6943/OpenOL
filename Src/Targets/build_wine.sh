@@ -56,6 +56,17 @@ run_msbuild() {
         $EXTRA
 }
 
+# ---- Helper: run a Windows .bat via Wine cmd ------------------------------
+run_bat() {
+    local BAT="$1"
+    if [ ! -f "$BAT" ]; then
+        echo "error: not found: $BAT"
+        exit 1
+    fi
+    local BAT_W="Z:$(echo "$BAT" | sed 's|/|\\|g')"
+    wine cmd /c "$BAT_W"
+}
+
 # ---- Helper: run UBT ------------------------------------------------------
 run_ubt() {
     local CONFIG="$1"
@@ -78,8 +89,10 @@ echo "  1) Build OLGame.exe        (UBT, incremental)"
 echo "  2) Rebuild OLGame.exe      (UBT, clean obj)"
 echo "  3) Build OutlastLauncher   (MSVC, Release|Win32)"
 echo "  4) Build UnrealBuildTool   (MSBuild, Release)"
+echo "  5) Build UnrealScript      (compile.bat Win64)"
+echo "  6) Build UnrealScript      (compile_32.bat Win32)"
 echo ""
-printf "  Choice [1-4]: "
+printf "  Choice [1-6]: "
 read -r CHOICE
 
 case "$CHOICE" in
@@ -99,6 +112,14 @@ case "$CHOICE" in
         echo "[build_wine] Build UnrealBuildTool"
         UBT_OUT_W="Z:$(realpath "$DEV_DIR/Intermediate/UnrealBuildTool/Release/" | sed 's|/|\\|g')\\"
         run_msbuild "$UBT_CSPROJ" "Release" "/p:OutputPath=\"$UBT_OUT_W\"" "AnyCPU"
+        ;;
+    5)
+        echo "[build_wine] Run compile.bat"
+        run_bat "$SCRIPT_DIR/../../../compile.bat"
+        ;;
+    6)
+        echo "[build_wine] Run compile_32.bat"
+        run_bat "$SCRIPT_DIR/../../../compile_32.bat"
         ;;
     *)
         echo "Invalid choice."
