@@ -34,6 +34,9 @@ var native transient Array<pointer> CachedLevelList{ULevel};
 // Components
 var SkeletalMeshComponent ShadowProxy;
 var StaticMeshComponent HeadMesh;
+var SkeletalMeshComponent DummyHeadMesh;  // Skeletal head mesh for dummy players (WorkerHead_V2)
+var int DummyHeadCamPitch;  // Last received camera pitch for dummy — reapplied every tick
+var int DummyHeadCamYaw;    // Last received camera yaw for dummy — reapplied every tick
 var SkeletalMeshComponent CameraMesh;
 var SkeletalMeshComponent CameraMeshShadowProxy;
 var ParticleSystemComponent BloodEffect;
@@ -807,6 +810,7 @@ var const string RTPCPlayerSpeed;
 
 cpptext
 {
+	void ApplyNeckBoneRotation(INT CamPitchUNR);
 	virtual FName GetMaterialBelowFeet();
 	virtual void performPhysics(FLOAT deltaSeconds);
 	virtual void SetBase(AActor *NewBase, FVector NewFloor = FVector(0,0,1), INT bNotifyActor=1, USkeletalMeshComponent* SkelComp=NULL, FName BoneName=NAME_None );

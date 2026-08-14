@@ -13,6 +13,7 @@ var config bool   SyncInteractable;
 var config bool   SyncEnemies;
 var config bool   SyncMatinees;
 var config bool   SyncPickups;
+var config string HostSteamID;  // SteamID of the host for P2P join
 
 static function Save(string NewIP, string NewUdpPort, string NewUserName,
     bool bSyncInteractable, bool bSyncEnemies, bool bSyncMatinees, bool bSyncPickups,
@@ -30,6 +31,13 @@ static function Save(string NewIP, string NewUdpPort, string NewUserName,
     StaticSaveConfig();
 }
 
+static function SaveHostSteamID(string NewHostSteamID)
+{
+    default.HostSteamID = NewHostSteamID;
+    StaticSaveConfig();
+}
+
 DefaultProperties
 {
+    RoomCode="DEFAULT"
 }

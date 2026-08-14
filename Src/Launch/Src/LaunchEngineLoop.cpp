@@ -3071,8 +3071,8 @@ INT FEngineLoop::PreInit( const TCHAR* CmdLine )
 			// Set UCC as the current package (used for e.g. log and localization files).
 			appStrcpy( GPackage, TEXT("UCC") );
 
-			// Bring up console unless we're a silent build.
-			if( GLogConsole && !GIsSilent )
+			// Bring up console unless we're a silent build or using -stdout (terminal output).
+			if( GLogConsole && !GIsSilent && !ParseParam(appCmdLine(), TEXT("STDOUT")) )
 			{
 				GLogConsole->Show( TRUE );
 			}

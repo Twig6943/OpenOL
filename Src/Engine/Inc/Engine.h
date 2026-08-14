@@ -25,6 +25,9 @@ extern class UEngine*			GEngine;
 /** Enables texture streaming support.  Must not be changed after engine is initialized. */
 extern UBOOL GUseTextureStreaming;
 
+/** When TRUE, editor sprite components are rendered in game (FreeCam Inspector mode). */
+extern UBOOL GShowEditorSprites;
+
 /** Whether screen door fade effects are used in game */
 extern UBOOL GAllowScreenDoorFade;
 

@@ -1987,6 +1987,7 @@ public:
     FVector NavigationExtent;
     class UOLAISightComponent* SightComponent;
     class UOLBTBehavior* RootBehavior;
+    class UOLBTBehavior* PendingBehavior;
     FName InterruptionState;
     BYTE BehaviorState;
     BYTE LastBehaviorState;
@@ -2559,7 +2560,7 @@ public:
 
     DECLARE_ABSTRACT_CLASS(UOLBTNode,UObject,0,OLGame)
 	virtual UOLBTTask* CreateTask();
-	virtual void DestroyTask(UOLBTTask* aTask) {}
+	virtual void DestroyTask(UOLBTTask* aTask);
 
 	void GetNodes(TArray<UOLBTNode*>& Nodes);
 	virtual void GetNodesInternal(TArray<UOLBTNode*>& Nodes);

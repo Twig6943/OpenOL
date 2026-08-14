@@ -1359,6 +1359,7 @@ public:
     BITFIELD bDebugAIPositions:1;
     BITFIELD bSuppressAllMessages:1;
     BITFIELD bPausedForFreeCam:1;
+    BITFIELD bFreeCamInspector:1;
     FStringNoInit DebugSoundEnvFilter;
     FLOAT NextSpikeTime;
     FLOAT AutoSpikeDelay;
@@ -1390,6 +1391,7 @@ public:
     virtual void LoadDLCSoundBank(const FString& BankName);
     virtual void SetLanguage(const FString& LanguageCode);
     virtual void DingoTest(INT Id);
+    virtual void SetShowEditorSprites(UBOOL bShow);
     DECLARE_FUNCTION(execAddDebugTrajectoryPoint)
     {
         P_GET_STRUCT(struct FDebugTrajectoryPoint,Point);
@@ -1525,6 +1527,12 @@ public:
         P_GET_INT(Id);
         P_FINISH;
         this->DingoTest(Id);
+    }
+    DECLARE_FUNCTION(execSetShowEditorSprites)
+    {
+        P_GET_UBOOL(bShow);
+        P_FINISH;
+        this->SetShowEditorSprites(bShow);
     }
     UBOOL eventProcessCheatInput(class UOLPlayerInput* InputMgr,FName Key)
     {
@@ -4772,6 +4780,9 @@ public:
     TArrayNoInit<ULevel*> CachedLevelList;
     class USkeletalMeshComponent* ShadowProxy;
     class UStaticMeshComponent* HeadMesh;
+    class USkeletalMeshComponent* DummyHeadMesh;
+    INT DummyHeadCamPitch;
+    INT DummyHeadCamYaw;
     class USkeletalMeshComponent* CameraMesh;
     class USkeletalMeshComponent* CameraMeshShadowProxy;
     class UParticleSystemComponent* BloodEffect;
@@ -6305,6 +6316,7 @@ public:
         ProcessEvent(FindFunctionChecked(OLGAME_RespawnHero),NULL);
     }
     DECLARE_CLASS(AOLHero,AOLPawn,0|CLASS_Config,OLGame)
+	void ApplyNeckBoneRotation(INT CamPitchUNR);
 	virtual FName GetMaterialBelowFeet();
 	virtual void performPhysics(FLOAT deltaSeconds);
 	virtual void SetBase(AActor *NewBase, FVector NewFloor = FVector(0,0,1), INT bNotifyActor=1, USkeletalMeshComponent* SkelComp=NULL, FName BoneName=NAME_None );
@@ -6760,6 +6772,22 @@ struct FDeprecatedCheckpointRecord
     }
 };
 
+struct FInspectorHit
+{
+    class AActor* HitActor;
+    class UStaticMeshComponent* HitSMC;
+    class USkeletalMeshComponent* HitSKMC;
+    FVector HitLoc;
+    FLOAT Dist;
+
+    /** Constructors */
+    FInspectorHit() {}
+    FInspectorHit(EEventParm)
+    {
+        appMemzero(this, sizeof(FInspectorHit));
+    }
+};
+
 struct OLPlayerController_eventOnLevelBecameVisible_Parms
 {
     FString PackageName;
@@ -7030,6 +7058,8 @@ public:
     FVector DebugCamPos;
     FLOAT DebugFreeCamSpeed;
     FLOAT DebugFreeCamFOV;
+    INT InspectorHitIndex;
+    TArrayNoInit<struct FInspectorHit> InspectorHits;
     FLOAT SlowDownFactor;
     //## END PROPS OLPlayerController
 
@@ -7060,6 +7090,9 @@ public:
     virtual void NativeApplyRemoteRecording(class AOLRecordingMarker* Marker);
     virtual FString NativeBuildInviteLink(const FString& IP,const FString& Port,const FString& Room,const FString& Pass);
     virtual UBOOL NativeParseInviteLink(const FString& Link,FString& OutIP,FString& OutPort,FString& OutRoom,FString& OutPass);
+    virtual void NativeConnectP2P(const FString& HostSteamID,INT RelayPort,const FString& RoomCode,const FString& Password);
+    virtual FString NativeGetMySteamID();
+    virtual void NativeOpenSteamFriendsOverlay();
     DECLARE_FUNCTION(execNativePlayerMove)
     {
         P_GET_FLOAT(DeltaTime);
@@ -7213,6 +7246,25 @@ public:
         P_GET_STR_REF(OutPass);
         P_FINISH;
         *(UBOOL*)Result=this->NativeParseInviteLink(Link,OutIP,OutPort,OutRoom,OutPass);
+    }
+    DECLARE_FUNCTION(execNativeConnectP2P)
+    {
+        P_GET_STR(HostSteamID);
+        P_GET_INT(RelayPort);
+        P_GET_STR(RoomCode);
+        P_GET_STR(Password);
+        P_FINISH;
+        this->NativeConnectP2P(HostSteamID,RelayPort,RoomCode,Password);
+    }
+    DECLARE_FUNCTION(execNativeGetMySteamID)
+    {
+        P_FINISH;
+        *(FString*)Result=this->NativeGetMySteamID();
+    }
+    DECLARE_FUNCTION(execNativeOpenSteamFriendsOverlay)
+    {
+        P_FINISH;
+        this->NativeOpenSteamFriendsOverlay();
     }
     void eventOnLevelBecameVisible(const FString& PackageName)
     {
@@ -8417,6 +8469,7 @@ public:
 #endif // !NAMES_ONLY
 
 AUTOGENERATE_FUNCTION(AOLCameraActor,-1,execNativeGetCameraView);
+AUTOGENERATE_FUNCTION(UOLCheatManager,-1,execSetShowEditorSprites);
 AUTOGENERATE_FUNCTION(UOLCheatManager,-1,execDingoTest);
 AUTOGENERATE_FUNCTION(UOLCheatManager,-1,execSetLanguage);
 AUTOGENERATE_FUNCTION(UOLCheatManager,-1,execLoadDLCSoundBank);
@@ -8659,6 +8712,9 @@ AUTOGENERATE_FUNCTION(AOLHero,-1,execGetViewRotation);
 AUTOGENERATE_FUNCTION(AOLHero,-1,execGetPawnViewLocation);
 AUTOGENERATE_FUNCTION(AOLCollectiblePickup,-1,execShouldShowCollectible);
 AUTOGENERATE_FUNCTION(AOLGameplayItemPickup,-1,execShouldShowItem);
+AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeOpenSteamFriendsOverlay);
+AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeGetMySteamID);
+AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeConnectP2P);
 AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeParseInviteLink);
 AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeBuildInviteLink);
 AUTOGENERATE_FUNCTION(AOLPlayerController,-1,execNativeApplyRemoteRecording);
@@ -8848,6 +8904,7 @@ FNativeFunctionLookup GOLGameAOLCameraActorNatives[] =
 
 FNativeFunctionLookup GOLGameUOLCheatManagerNatives[] = 
 { 
+	MAP_NATIVE(UOLCheatManager, execSetShowEditorSprites)
 	MAP_NATIVE(UOLCheatManager, execDingoTest)
 	MAP_NATIVE(UOLCheatManager, execSetLanguage)
 	MAP_NATIVE(UOLCheatManager, execLoadDLCSoundBank)
@@ -9175,6 +9232,9 @@ FNativeFunctionLookup GOLGameAOLGameplayItemPickupNatives[] =
 
 FNativeFunctionLookup GOLGameAOLPlayerControllerNatives[] = 
 { 
+	MAP_NATIVE(AOLPlayerController, execNativeOpenSteamFriendsOverlay)
+	MAP_NATIVE(AOLPlayerController, execNativeGetMySteamID)
+	MAP_NATIVE(AOLPlayerController, execNativeConnectP2P)
 	MAP_NATIVE(AOLPlayerController, execNativeParseInviteLink)
 	MAP_NATIVE(AOLPlayerController, execNativeBuildInviteLink)
 	MAP_NATIVE(AOLPlayerController, execNativeApplyRemoteRecording)

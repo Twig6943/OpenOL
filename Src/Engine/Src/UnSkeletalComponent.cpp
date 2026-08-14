@@ -67,6 +67,10 @@
 
 IMPLEMENT_CLASS(USkeletalMeshComponent);
 
+// Global post-anim hook — default no-op; set by OLHero.cpp.
+static void NullPostUpdateSkelPose(USkeletalMeshComponent*) {}
+void (*OnPostUpdateSkelPose)(USkeletalMeshComponent* Comp) = NullPostUpdateSkelPose;
+
 /** Whether to show drop rates for skeletal mesh components using colored glow. */
 UBOOL GVisualizeSkeletalMeshTickOptimization = FALSE;
 
@@ -1664,7 +1668,7 @@ void USkeletalMeshComponent::Tick(FLOAT DeltaTime)
 			DOUBLE UpdatePoseStart = appSeconds();
 #endif
 			// Update the mesh-space bone transforms held in SpaceBases array from animation data.
-			UpdateSkelPose( DeltaTime ); 
+			UpdateSkelPose( DeltaTime );
 
 #if PERF_SHOW_SKELETAL_MESH_COMPONENT_TICK_TIME || LOOKING_FOR_PERF_ISSUES
 			UpdatePoseTotal = (appSeconds() - UpdatePoseStart) * 1000.f;
@@ -4414,6 +4418,9 @@ void USkeletalMeshComponent::UpdateSkelPose( FLOAT DeltaTime, UBOOL bTickFaceFX 
 		CachedLocalAtoms.Empty();
 		CachedSpaceBases.Empty();
 	}
+
+	// Allow game code to apply post-animation bone overrides (SpaceBases/LocalAtoms are final here).
+	OnPostUpdateSkelPose( this );
 }
 
 /** Used by the SkelControlFootPlacement to line-check against the world and find the point to place the foot bone. */

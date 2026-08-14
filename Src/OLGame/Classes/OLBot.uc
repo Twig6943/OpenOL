@@ -29,6 +29,9 @@ var OLAISightComponent SightComponent;
 /** The currently running behavior. */
 var OLBTBehavior RootBehavior;
 
+/** Cached recalculation behavior — reused every tick to avoid GC churn. */
+var OLBTBehavior PendingBehavior;
+
 var() bool bDebugBehaviorTransitions;
 var() bool bDebugThrowCalculations;
 

@@ -253,8 +253,8 @@ static void ApplyHeroState(AMultiplayerController* Controller, INT Idx, const FH
         Dummy->SetLocation(S.Loc);
         Dummy->SetRotation(S.Rot);
         // Unhide mesh on first LOC packet — SpawnDummy hides it until we have a valid position.
-        if (Dummy->Mesh)     Dummy->Mesh->SetHiddenGame(FALSE);
-        if (Dummy->HeadMesh) Dummy->HeadMesh->SetHiddenGame(FALSE);
+        if (Dummy->Mesh)          Dummy->Mesh->SetHiddenGame(FALSE);
+        if (Dummy->DummyHeadMesh) Dummy->DummyHeadMesh->SetHiddenGame(FALSE);
     }
     P->bHasReceivedData = TRUE;
 
@@ -1266,8 +1266,8 @@ void UHeroChannel::OnBinaryPlayerLifecycle(INT SenderID, BYTE* Data, INT DataLen
             AOLHero* RespawnDummy = Cast<AOLHero>(P->DummyPlayer);
             if (RespawnDummy)
             {
-                if (RespawnDummy->Mesh)    RespawnDummy->Mesh->SetHiddenGame(TRUE);
-                if (RespawnDummy->HeadMesh) RespawnDummy->HeadMesh->SetHiddenGame(TRUE);
+                if (RespawnDummy->Mesh)          RespawnDummy->Mesh->SetHiddenGame(TRUE);
+                if (RespawnDummy->DummyHeadMesh) RespawnDummy->DummyHeadMesh->SetHiddenGame(TRUE);
                 RespawnDummy->Health = 0;
             }
         }

@@ -1,5 +1,6 @@
 #include "Multiplayer.h"
 #include "OLGameClasses.h"
+#include "..\..\D3D9Drv\Src\OLImGui.h"
 #include "HeroChannel.h"
 #include "HeroChannelPackets.h"
 #include "DoorChannel.h"
@@ -11,6 +12,30 @@
 #include "MultiplayerHUD.h"
 
 extern FMpConnectionTicker* GMpTicker;
+
+// ImGui debug overlay: spawn a Soldier near the local player via OLCheatManager::SpawnEnemy.
+static void ImGuiAction_SpawnSoldier()
+{
+    if (!GEngine || GEngine->GamePlayers.Num() == 0)
+        return;
+    ULocalPlayer* LP = GEngine->GamePlayers(0);
+    if (!LP || !LP->Actor || !LP->Actor->CheatManager)
+        return;
+    UOLCheatManager* CM = Cast<UOLCheatManager>(LP->Actor->CheatManager);
+    if (!CM)
+        return;
+
+    struct FSpawnEnemyParms
+    {
+        FString EnemyType;
+        BYTE    WeaponToUse;
+        UBOOL   ShouldAttack;
+    } Parms;
+    Parms.EnemyType   = TEXT("Soldier");
+    Parms.WeaponToUse = 0; // EWeaponToUse::Weapon_None
+    Parms.ShouldAttack = TRUE;
+    CM->ProcessEvent(CM->FindFunctionChecked(FName(TEXT("SpawnEnemy"))), &Parms);
+}
 
 void AMultiplayerController::NativeInit()
 {
@@ -24,6 +49,14 @@ void AMultiplayerController::NativeInit()
     {
         GMpTicker = new FMpConnectionTicker();
         atexit([]() { GMpConn.Disconnect(); });
+    }
+
+    // Register ImGui debug overlay actions (idempotent: only adds once per process lifetime).
+    static bool bActionsRegistered = false;
+    if (!bActionsRegistered)
+    {
+        OLImGui_RegisterAction("Spawn Soldier", ImGuiAction_SpawnSoldier);
+        bActionsRegistered = true;
     }
 
     GMpConn.Connect();

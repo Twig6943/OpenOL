@@ -478,10 +478,12 @@ void AOLBot::TickBehavior( FLOAT DeltaSeconds )
 
 			RootBehavior->GetTreeState(RootState);
 
-			UOLBTBehavior* NewBehavior = ConstructObject<UOLBTBehavior>(UOLBTBehavior::StaticClass(), this);
-			NewBehavior->Setup(EnemyPawn->BehaviorTree->RootNode, this);
+			// Reuse PendingBehavior to avoid allocating a new UOLBTBehavior every recalc tick.
+			if (PendingBehavior == NULL)
+				PendingBehavior = ConstructObject<UOLBTBehavior>(UOLBTBehavior::StaticClass(), this);
+			PendingBehavior->Setup(EnemyPawn->BehaviorTree->RootNode, this);
 
-			btStatus = NewBehavior->Tick(DeltaSeconds, &RootState, &NewState);
+			btStatus = PendingBehavior->Tick(DeltaSeconds, &RootState, &NewState);
 
 			if (btStatus == Status_ReachedCurrent)
 			{
@@ -491,9 +493,11 @@ void AOLBot::TickBehavior( FLOAT DeltaSeconds )
 			}
 			else
 			{
-				RootBehavior->Teardown();
-
-				RootBehavior = NewBehavior;
+				// Swap: old root becomes the next pending — zero allocations.
+				UOLBTBehavior* OldRoot = RootBehavior;
+				OldRoot->Teardown();
+				RootBehavior    = PendingBehavior;
+				PendingBehavior = OldRoot;
 			}
 		}
 

@@ -96,6 +96,12 @@ public:
 
     FLOAT   PingTimer;
 
+    // P2P mode — connect to host via Steam P2P instead of direct UDP.
+    // When bP2PMode is TRUE, FP2PBridge is used as a loopback tunnel.
+    // HostSteamID is the 64-bit SteamID of the host.
+    UBOOL   bP2PMode;
+    QWORD   HostSteamID;
+
     FMpConnection()
         : bIsConnected(FALSE), bIsHandshaked(FALSE), bResolved(FALSE)
         , LocalPlayerID(0), HelloAttempt(0), LastReceivedTime(0.f)
@@ -104,10 +110,15 @@ public:
         , SyncMatinees(TRUE), SyncPickups(TRUE)
         , bHasSessionToken(FALSE)
         , OnlineCount(0), PingTimer(5.f)
+        , bP2PMode(FALSE), HostSteamID(0)
     {
         appMemzero(&ServerAddr, sizeof(ServerAddr));
         appMemzero(SessionToken, sizeof(SessionToken));
     }
+
+    // Connect via Steam P2P to the given host SteamID.
+    // Sets up FP2PBridge loopback and points ServerAddr to the virtual port.
+    void ConnectP2P(QWORD InHostSteamID, WORD InRelayPort, const FString& InRoomCode, const FString& InPassword);
 
     // Load settings from DefaultMultiplayer.ini ([Multiplayer.MultiplayerLink]).
     void LoadConfig();

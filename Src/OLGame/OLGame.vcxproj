@@ -59,7 +59,7 @@
     <NMakeForcedUsingAssemblies Condition="'$(Configuration)|$(Platform)'=='BuiltWithUnrealBuildTool|Xbox 360'">$(NMakeForcedUsingAssemblies)</NMakeForcedUsingAssemblies>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='BuiltWithUnrealBuildTool|Win32'">
-    <IncludePath>$(ProjectDir)Inc;$(ProjectDir)Src;$(ProjectDir)..\Engine\Src;$(ProjectDir)..\Engine\Inc;$(ProjectDir)..\Core\Src;$(ProjectDir)..\Core\Inc;$(ProjectDir)..\UDKBase\Src;$(ProjectDir)..\UDKBase\Inc;$(ProjectDir)..\AkAudio\Src;$(ProjectDir)..\AkAudio\Inc;$(ProjectDir)..\Multiplayer\Inc;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)Inc;$(ProjectDir)Src;$(ProjectDir)..\Engine\Src;$(ProjectDir)..\Engine\Inc;$(ProjectDir)..\Core\Src;$(ProjectDir)..\Core\Inc;$(ProjectDir)..\UDKBase\Src;$(ProjectDir)..\UDKBase\Inc;$(ProjectDir)..\AkAudio\Src;$(ProjectDir)..\AkAudio\Inc;$(ProjectDir)..\Multiplayer\Inc;$(ProjectDir)..\..\External\openol_relay\include;$(ProjectDir)..\OnlineSubsystemSteamworks\Inc;$(ProjectDir)..\..\External\Steamworks\sdk\public;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
@@ -566,6 +566,8 @@
     <ClCompile Include="..\Multiplayer\Src\PushableChannel.cpp" />
     <ClCompile Include="..\Multiplayer\Src\WorldChannel.cpp" />
     <ClCompile Include="..\Multiplayer\Src\MultiplayerHUD.cpp" />
+    <ClCompile Include="..\Multiplayer\Src\RelayThread.cpp" />
+    <ClCompile Include="..\Multiplayer\Src\P2PBridge.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Inc\OLDingo.h" />

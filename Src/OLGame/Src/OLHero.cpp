@@ -6,6 +6,16 @@
 #include "OLUtilities.h"
 #include "OLDingo.h"
 
+// Runtime tuning vectors from ImGui (defined in D3D9Drv/OLImGui.cpp).
+extern volatile float GDebugVec0[3]; // WorkerHead->Origin
+extern volatile float GDebugVec1[3]; // AttachComponent offset
+
+// Forward declaration — defined near SetDummyHeadPitch.
+static void DummyMeshPostAnimCallback(USkeletalMeshComponent* Comp);
+
+// Global hook defined in UnSkeletalComponent.cpp.
+extern void (*OnPostUpdateSkelPose)(USkeletalMeshComponent* Comp);
+
 IMPLEMENT_CLASS(AOLHero);
 
 const FLOAT Fudge = 5.0f;
@@ -11632,6 +11642,8 @@ void AOLHero::InitDummyMesh()
         Mesh->SetOwnerNoSee(FALSE);
         Mesh->bUpdateSkelWhenNotRendered = TRUE;
         Mesh->bTickAnimNodesWhenNotRendered = TRUE;
+        // Register global post-anim hook so neck bone rotation is applied after each UpdateSkelPose.
+        OnPostUpdateSkelPose = DummyMeshPostAnimCallback;
         // Force lighting rebuild so the mesh is lit correctly before the first move.
         Mesh->BeginDeferredReattach();
     }
@@ -11648,10 +11660,48 @@ void AOLHero::InitDummyMesh()
         HeadMesh->DetachFromAny();
         HeadMesh->SetShadowParent(Mesh);
         Mesh->AttachComponent(HeadMesh, HeadBoneName);
-        HeadMesh->SetHiddenGame(FALSE);
+        HeadMesh->SetHiddenGame(TRUE);   // Dummy uses DummyHeadMesh (SkeletalMesh) instead
         HeadMesh->SetOwnerNoSee(FALSE);
         HeadMesh->AbsoluteRotation = TRUE;
         HeadMesh->Rotation = FRotator(0, 0, 0);
+
+        // Attach a separate SkeletalMeshComponent with WorkerHead_V2 to the Hero-Head bone.
+        // The original HeadMesh is a StaticMeshComponent; we need a SkeletalMeshComponent instead.
+        if (!DummyHeadMesh)
+        {
+            DummyHeadMesh = ConstructObject<USkeletalMeshComponent>(
+                USkeletalMeshComponent::StaticClass(), this);
+        }
+        USkeletalMesh* WorkerHead = Cast<USkeletalMesh>(
+            Utils::LoadObjectFromModPackage(
+                TEXT("PrisonOldCells_01-Art"),
+                TEXT("03_OL_ScriptedEvents.WorkerHead_V2"),
+                USkeletalMesh::StaticClass()));
+        if (WorkerHead)
+        {
+            // Origin and attach offset driven by ImGui tuning vectors (GDebugVec0/1).
+            WorkerHead->Origin = FVector(GDebugVec0[0], GDebugVec0[1], GDebugVec0[2]);
+            DummyHeadMesh->SetSkeletalMesh(WorkerHead);
+            DummyHeadMesh->SetHiddenGame(FALSE);
+            DummyHeadMesh->SetOwnerNoSee(FALSE);
+            DummyHeadMesh->SetShadowParent(ShadowProxy);
+            DummyHeadMesh->bCastHiddenShadow = TRUE;
+            DummyHeadMesh->CastShadow = TRUE;
+            DummyHeadMesh->bCastDynamicShadow = TRUE;
+            DummyHeadMesh->BlockActors = FALSE;
+            DummyHeadMesh->CollideActors = FALSE;
+            DummyHeadMesh->LightEnvironment = LightEnvironment;
+            // Initial mesh orientation correction — overridden per-frame by DummyMeshPostAnimCallback.
+            DummyHeadMesh->AbsoluteRotation = TRUE;
+            DummyHeadMesh->Rotation = FRotator(
+                (INT)(90.f * DEG_TO_UNR),
+                (INT)(90.f * DEG_TO_UNR),
+                (INT)(-90.f * DEG_TO_UNR));
+            if (DummyHeadMesh->IsAttached())
+                DummyHeadMesh->DetachFromAny();
+        }
+        else
+            debugf(TEXT("[DummyMesh] Failed to load WorkerHead_V2 from PrisonOldCells_01-Art"));
     }
     // Attach CameraMesh to the same aux bone as for the local player.
     // OLAnimCameraSpace on Mesh is bypassed for dummies (no OLPC), so the animation
@@ -11703,12 +11753,80 @@ void AOLHero::StopDummyUpperBodyAnim(FLOAT BlendOut)
         RightArmAnimSlot->StopCustomAnim(BlendOut);
 }
 
+// Post-animation callback set on Dummy's Mesh — called after UpdateSkelPose each tick.
+static void DummyMeshPostAnimCallback(USkeletalMeshComponent* Comp)
+{
+    AOLHero* Hero = Cast<AOLHero>(Comp->GetOwner());
+    if (!Hero || !Hero->bIsDummyPawn || Comp != Hero->Mesh)
+        return;
+
+    // Reattach head mesh to Hero-Neck every frame with offset = Hero-Neck → Hero-Head.
+    // This ensures the head mesh sits at the Head bone position but pivots from the Neck.
+    if (Hero->DummyHeadMesh)
+    {
+        static FName NeckBone(TEXT("Hero-Neck"));
+        static FName HeadBone(TEXT("Hero-Head"));
+        INT NeckIdx = Comp->MatchRefBone(NeckBone);
+        INT HeadIdx = Comp->MatchRefBone(HeadBone);
+        if (NeckIdx != INDEX_NONE && HeadIdx != INDEX_NONE)
+        {
+            FMatrix NeckToWorld = Comp->SpaceBases(NeckIdx).ToMatrix() * Comp->LocalToWorld;
+            FVector NeckWorld   = NeckToWorld.GetOrigin();
+            FVector HeadWorld   = Comp->GetBoneMatrix(HeadIdx).GetOrigin();
+            FVector OffsetLocal = NeckToWorld.Inverse().TransformNormal(HeadWorld - NeckWorld);
+            OffsetLocal += FVector(0, -5.f, 0);
+
+            Hero->DummyHeadMesh->AbsoluteRotation = FALSE;
+            Comp->DetachComponent(Hero->DummyHeadMesh);
+            Comp->AttachComponent(Hero->DummyHeadMesh, NeckBone, OffsetLocal);
+
+            // Stretch WorkerHead_bone toward Hero-Neck by writing its LocalAtoms translation.
+            // No animation on DummyHeadMesh so LocalAtoms won't be overwritten each tick.
+            static FName WorkerHeadBone(TEXT("WorkerHead_bone"));
+            INT WHBIdx = Hero->DummyHeadMesh->MatchRefBone(WorkerHeadBone);
+            if (WHBIdx != INDEX_NONE && WHBIdx < Hero->DummyHeadMesh->LocalAtoms.Num())
+            {
+                // Neck→Head world vector, rotated into DummyHeadMesh local space (no translation).
+                FVector StretchVec = Hero->DummyHeadMesh->LocalToWorld.Inverse().TransformNormal(NeckWorld - HeadWorld);
+                Hero->DummyHeadMesh->LocalAtoms(WHBIdx).SetTranslation(StretchVec);
+            }
+        }
+    }
+
+    Hero->ApplyNeckBoneRotation(Hero->DummyHeadCamPitch);
+}
+
+void AOLHero::ApplyNeckBoneRotation(INT CamPitchUNR)
+{
+    if (!Mesh || Mesh->LocalAtoms.Num() == 0 || Mesh->SpaceBases.Num() == 0)
+        return;
+
+    FQuat BoneDeltaQ = FRotator(0, 0, -CamPitchUNR).Quaternion();
+
+    // SpaceBases here contains the fresh animated value (just computed by ComposeSkeleton).
+    // Apply delta on top of the animated rotation — no accumulation because ComposeSkeleton
+    // rebuilds SpaceBases from LocalAtoms every frame before our callback runs.
+    static FName NeckBoneName(TEXT("Hero-Neck"));
+    INT NeckIdx = Mesh->MatchRefBone(NeckBoneName);
+    if (NeckIdx != INDEX_NONE && NeckIdx < Mesh->SpaceBases.Num())
+    {
+        Mesh->SpaceBases(NeckIdx).SetRotation(BoneDeltaQ * Mesh->SpaceBases(NeckIdx).GetRotation());
+    }
+
+}
+
 void AOLHero::SetDummyHeadPitch(INT CamPitchUNR, INT CamYawUNR)
 {
-    if (!HeadMesh)
-        return;
-    HeadMesh->AbsoluteRotation = TRUE;
-    HeadMesh->Rotation = FRotator(0, CamYawUNR, -CamPitchUNR);
+    // Store for per-tick reapplication in TickPrePhysics.
+    DummyHeadCamPitch = CamPitchUNR;
+    DummyHeadCamYaw   = CamYawUNR;
+
+    if (HeadMesh)
+    {
+        HeadMesh->AbsoluteRotation = TRUE;
+        HeadMesh->Rotation = FRotator(0, CamYawUNR, -CamPitchUNR);
+    }
+    // DummyHeadMesh positioning is handled every frame in DummyMeshPostAnimCallback.
 }
 
 void AOLHero::SetDummyUpperBodyIdleAnim(FName AnimName, FLOAT Rate)

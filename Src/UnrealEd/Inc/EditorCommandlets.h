@@ -1026,6 +1026,10 @@ BEGIN_COMMANDLET(CookPackages,UnrealEd)
 	TMap<FName,FString>				TextureCacheNameToFilenameMap;
 	/** DLC name to cook for user-created mods and DLC											*/
 	FString							DLCName;
+	/** Shipping CookedPCConsole directory used when -modcook is active (e.g. for TFC lookup)	*/
+	FString							ModCookShippingDir;
+	/** Maps package name -> source file path, populated during LoadPackageForCooking			*/
+	TMap<FString,FString>			ModCookPackageSourcePaths;
 	/** Set containing all packages that need to be cooked if bOnlyCookDependencies	== TRUE.	*/
 	TMap<FString,INT>				PackageDependencies;
 	/** Regular packages required to be cooked/ present.										*/

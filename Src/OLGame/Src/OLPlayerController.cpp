@@ -1,5 +1,20 @@
+// winsock2.h before any UE3 headers (required by P2PBridge/RelayThread includes).
+#ifdef _WIN32
+#  ifndef _WINDOWS_
+#    define WIN32_LEAN_AND_MEAN
+#    ifndef NOMINMAX
+#      define NOMINMAX
+#    endif
+#    include <winsock2.h>
+#  endif
+#endif
+#ifndef _WINSOCK2API_
+#  define _WINSOCK2API_
+#endif
+
 #include "OLGame.h"
 #include "OLUtilities.h"
+#include "..\..\OnlineSubsystemSteamworks\Inc\OnlineSubsystemSteamworks.h"
 #include "EngineAnimClasses.h"
 #include "UDKBaseAnimationClasses.h"
 #include "GameFrameworkAnimClasses.h"
@@ -2949,6 +2964,31 @@ UBOOL AOLPlayerController::NativeParseInviteLink(const FString& Link, FString& O
     }
 
     return TRUE;
+}
+
+FString AOLPlayerController::NativeGetMySteamID()
+{
+    if (GSteamUser)
+        return FString::Printf(TEXT("%llu"), (unsigned long long)GSteamUser->GetSteamID().ConvertToUint64());
+    return TEXT("");
+}
+
+void AOLPlayerController::NativeOpenSteamFriendsOverlay()
+{
+    if (GSteamFriends)
+        GSteamFriends->ActivateGameOverlay("friends");
+}
+
+void AOLPlayerController::NativeConnectP2P(const FString& HostSteamID, INT RelayPort,
+    const FString& RoomCode, const FString& Password)
+{
+    // Forward to FMpConnection::ConnectP2P via the extern declared in Multiplayer package.
+    // Avoids pulling the entire Multiplayer header chain into the OLGame Unity build.
+    typedef void (*FConnectP2PFn)(QWORD, WORD, const FString&, const FString&);
+    extern void GMpConn_ConnectP2P(QWORD, WORD, const FString&, const FString&);
+    QWORD SteamID = (QWORD)appAtoi64(*HostSteamID);
+    if (SteamID != 0)
+        GMpConn_ConnectP2P(SteamID, (WORD)RelayPort, RoomCode, Password);
 }
 
 void AOLPlayerController::DrawDebug()

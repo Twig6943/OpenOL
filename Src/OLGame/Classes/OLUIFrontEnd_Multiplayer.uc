@@ -20,6 +20,9 @@ var localized string SyncInteractableText;
 var localized string SyncEnemiesText;
 var localized string SyncMatineesText;
 var localized string SyncPickupsText;
+var localized string HostSteamIDText;
+var localized string JoinSteamText;
+var localized string MySteamIDText;
 
 // OST_ type constants matching OptionsList.as
 const OST_CHECKBOX       = 0;
@@ -27,8 +30,9 @@ const OST_BUTTON         = 4; // OST_ControllerConfigButton — single button ro
 const OST_TEXTINPUT      = 6;
 
 // Fake ProfileSettingIDs used to identify our custom buttons in Press_OptionItemButton
-const BTN_ID_COPY_LINK   = 9001;
+const BTN_ID_COPY_LINK    = 9001;
 const BTN_ID_INVITE_STEAM = 9002;
+const BTN_ID_JOIN_STEAM   = 9003;
 
 // Indices into SettingsOptions array
 var int UsernameIdx;
@@ -41,6 +45,7 @@ var int SyncEnemiesIdx;
 var int SyncMatineesIdx;
 var int SyncPickupsIdx;
 var int InviteLinkIdx;
+var int HostSteamIDIdx;
 
 struct SettingEntry
 {
@@ -56,7 +61,17 @@ var array<SettingEntry> SettingsOptions;
 function OnViewLoaded()
 {
     Super.OnViewLoaded();
+    SetFunction("Press_OptionItemButton", self, nameof(Press_OptionItemButton));
+    SetFunction("OnTextInputChanged", self, nameof(OnTextInputChanged));
     BuildOptions();
+}
+
+// Called by Flash whenever any text input field changes.
+// idx = index in SettingsOptions array, NewValue = current text.
+function OnTextInputChanged(int idx, string NewValue)
+{
+    if (idx >= 0 && idx < SettingsOptions.Length)
+        SettingsOptions[idx].StringValue = NewValue;
 }
 
 function Press_OptionItemButton(int PSID)
@@ -70,6 +85,9 @@ function Press_OptionItemButton(int PSID)
             break;
         case BTN_ID_INVITE_STEAM:
             Press_InviteSteam(Dummy);
+            break;
+        case BTN_ID_JOIN_STEAM:
+            Press_JoinSteam(Dummy);
             break;
     }
 }
@@ -132,6 +150,18 @@ function BuildOptions()
 
     E.Label = ""; E.Type = OST_BUTTON; E.StringValue = ""; E.IntValue = BTN_ID_INVITE_STEAM;
     SettingsOptions.AddItem(E);
+
+    // My SteamID (read-only, for sharing with the host).
+    E.Label = MySteamIDText; E.Type = OST_TEXTINPUT; E.StringValue = GetOLPC().NativeGetMySteamID(); E.IntValue = 0; E.bReadOnly = true;
+    SettingsOptions.AddItem(E);
+
+    // Steam P2P join: enter the host's SteamID and click Join.
+    E.Label = HostSteamIDText; E.Type = OST_TEXTINPUT; E.StringValue = GetOLPC().GetNetHostSteamID(); E.IntValue = 0; E.bReadOnly = false;
+    HostSteamIDIdx = SettingsOptions.Length;
+    SettingsOptions.AddItem(E);
+
+    E.Label = ""; E.Type = OST_BUTTON; E.StringValue = ""; E.IntValue = BTN_ID_JOIN_STEAM;
+    SettingsOptions.AddItem(E);
 }
 
 function PopulateList()
@@ -162,8 +192,10 @@ function PopulateList()
             LabelArr = CreateArray();
             if (SettingsOptions[i].IntValue == BTN_ID_COPY_LINK)
                 LabelArr.SetElementString(0, CopyLinkText);
-            else
+            else if (SettingsOptions[i].IntValue == BTN_ID_INVITE_STEAM)
                 LabelArr.SetElementString(0, InviteSteamText);
+            else
+                LabelArr.SetElementString(0, JoinSteamText);
             Obj.SetObject("ButtonLabelsList", LabelArr);
         }
         else
@@ -298,7 +330,38 @@ function Press_CopyLink(GFxClikWidget.EventData ev)
 
 function Press_InviteSteam(GFxClikWidget.EventData ev)
 {
-    // Steam invite: not implemented yet (Relay GUI handles this, Etap 3)
+    GetOLPC().NativeOpenSteamFriendsOverlay();
+}
+
+function Press_JoinSteam(GFxClikWidget.EventData ev)
+{
+    local string SteamIDStr;
+    local string MapName;
+
+    // Read current SteamID from the text field.
+    StoreListValues();
+    SteamIDStr = SettingsOptions[HostSteamIDIdx].StringValue;
+
+    if (Len(SteamIDStr) == 0)
+        return;
+
+    // Persist the HostSteamID so it survives restarts.
+    class'OLNetworkConfig'.static.SaveHostSteamID(SteamIDStr);
+
+    // Save settings (Username, RoomCode, Password, etc.) first.
+    SaveSettings();
+
+    // Initiate Steam P2P connection.
+    // Relay port comes from the Port field (same port the host's relay runs on).
+    GetOLPC().NativeConnectP2P(
+        SteamIDStr,
+        int(SettingsOptions[PortIdx].StringValue),
+        SettingsOptions[RoomCodeIdx].StringValue,
+        SettingsOptions[PasswordIdx].StringValue);
+
+    // Open the current map in multiplayer mode.
+    MapName = class'WorldInfo'.static.GetWorldInfo().GetMapName(true);
+    ConsoleCommand("open " $ MapName $ "?game=Multiplayer.MultiplayerGame");
 }
 
 function Press_Back(GFxClikWidget.EventData ev)

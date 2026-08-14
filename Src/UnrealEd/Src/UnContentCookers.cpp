@@ -2133,7 +2133,7 @@ FString UCookPackagesCommandlet::GetTextureCacheName(UTexture* Texture)
 		}
 
 		// shipped textures point to the original, not the mod version
-		if ((!MipDataInfo || MipDataInfo->TextureFileCacheName.ToString() == Filename + TEXT("_") + PatchTextureFileCacheSuffix))
+		if (!bIsShippedTexture && (!MipDataInfo || MipDataInfo->TextureFileCacheName.ToString() == Filename + TEXT("_") + PatchTextureFileCacheSuffix))
 		{
 			Filename += TEXT("_");
 			Filename += PatchTextureFileCacheSuffix;
@@ -7682,7 +7682,32 @@ void UCookPackagesCommandlet::PrepareForSaving(UPackage* Package, UObject* Objec
 		// Streaming textures will use the texture file cache if it is enabled.
 		if( bUseTextureFileCache && bIsStreamingTexture )
 		{
-			if (bIsMTChild)
+			// For mod cooking: if this texture is in the shipped PCD, use the original TFC name
+			// (Textures, CharTextures, or Lighting) so the cooked UPK references the original TFC.
+			FCookedBulkDataInfo* ShippedMip0Info = GShippingCookerData
+				? GShippingCookerData->GetBulkDataInfo(Texture2D, TEXT("MipLevel_0"))
+				: NULL;
+			if (!ShippedMip0Info && GShippingCookerData)
+			{
+				// try other mip levels if mip 0 is not stored in TFC
+				for (INT _Mip = 1; _Mip < 14 && !ShippedMip0Info; _Mip++)
+					ShippedMip0Info = GShippingCookerData->GetBulkDataInfo(Texture2D, *FString::Printf(TEXT("MipLevel_%i"), _Mip));
+			}
+
+			if (ShippedMip0Info)
+			{
+				// Use the original TFC name from shipping PCD (no _modded suffix).
+				Texture2D->TextureFileCacheName = ShippedMip0Info->TextureFileCacheName;
+			}
+			else if (GShippingCookerData && ParseParam(appCmdLine(), TEXT("MODTEXINPKG")))
+			{
+				// New (unshipped) texture + -modtexinpkg: embed mip data inline in the .upk.
+				// Force NeverStream so bAllowStoreInSeparateFile becomes FALSE and all mips
+				// are written inline — no TFC involved at all.
+				Texture2D->NeverStream = TRUE;
+				Texture2D->TextureFileCacheName = NAME_None;
+			}
+			else if (bIsMTChild)
 			{
 				// strip off numeric appendage...that only goes in the per-mip info
 				Texture2D->TextureFileCacheName = FName(*FName(*GetTextureCacheName(Texture2D)).GetNameString());
@@ -7698,6 +7723,8 @@ void UCookPackagesCommandlet::PrepareForSaving(UPackage* Package, UObject* Objec
 			Texture2D->TextureFileCacheName = NAME_None;
 		}
 		// TRUE if the texture mips can be stored in a separate file
+		// Re-read NeverStream in case it was set above (e.g. -modtexinpkg for unshipped textures).
+		bIsStreamingTexture = !Texture2D->NeverStream;
 		const UBOOL bAllowStoreInSeparateFile = bIsStreamingTexture && bIsSavedInSeekFreePackage;
 
 		// see if we have an existing cooked entry for the texture in the TFC
@@ -7707,24 +7734,31 @@ void UCookPackagesCommandlet::PrepareForSaving(UPackage* Package, UObject* Objec
 		
 		if( bUseTextureFileCache && bAllowStoreInSeparateFile )
 		{
-			if( DLCName.Len() )
+			if( GShippingCookerData )
 			{
-				// Check for the texture residing in the shipping TFCs (if we're cooking for DLC)
+				// DLC path: use PersistentCookerData for exact GUID lookup.
 				TextureFileCacheInfo = GShippingCookerData->GetTextureFileCacheEntryInfo(Texture2D);
 				if( TextureFileCacheInfo )
 				{
-					// compare Guids
 					if (TextureFileCacheInfo->TextureFileCacheGuid != Texture2D->TextureFileCacheGuid)
 					{
-						appErrorf( TEXT("Shipping texture updated for DLC; this is not allowed (%s)"), *Texture2D->GetFullName() );
+						if (DLCName.Len())
+						{
+							appErrorf( TEXT("Shipping texture updated for DLC; this is not allowed (%s)"), *Texture2D->GetFullName() );
+						}
+						else
+						{
+							warnf(TEXT("ModCook: texture GUID mismatch, re-cooking into mod TFC (%s)"), *Texture2D->GetFullName());
+							TextureFileCacheInfo = NULL;
+						}
 					}
 					else
 					{
-						// Ensure the texture is in the same cache it was...
 						bHasMatchingGuidTFC = TRUE;
 					}
 				}
 			}
+			// Mod cook: textures go into <name>_<tfssuffix>.tfc, handled by GetTextureCacheFilename.
 		}	
 		
 		if (Platform != PLATFORM_Android)
@@ -8119,12 +8153,44 @@ void UCookPackagesCommandlet::PrepareTextureForSaving(UPackage* Package, UTextur
 
 			if( bUseTextureFileCache )
 			{
+				// For mod cooking: if this texture exists in the original shipped PCD,
+				// use the original TFC offsets directly — do NOT write to our TFC.
+				FCookedBulkDataInfo* ShippedBulkDataInfo = NULL;
+				if (GShippingCookerData && Platform == PLATFORM_WindowsConsole)
+				{
+					ShippedBulkDataInfo = GShippingCookerData->GetBulkDataInfo(Texture2D, *BulkDataName);
+				}
+
+				if (ShippedBulkDataInfo)
+				{
+					// Texture lives in the original shipping TFC — reference it as-is, no write.
+					Mip.Data.StoreInSeparateFile(
+						TRUE,
+						ShippedBulkDataInfo->SavedBulkDataFlags,
+						ShippedBulkDataInfo->SavedElementCount,
+						ShippedBulkDataInfo->SavedBulkDataOffsetInFile,
+						ShippedBulkDataInfo->SavedBulkDataSizeOnDisk );
+
+					// Also update our PersistentCookerData so subsequent cooks are consistent.
+					if (!BulkDataInfo)
+					{
+						FCookedBulkDataInfo NewInfo;
+						PersistentCookerData->SetBulkDataInfo(Texture2D, *BulkDataName, NewInfo);
+						BulkDataInfo = PersistentCookerData->GetBulkDataInfo(Texture2D, *BulkDataName);
+					}
+					if (BulkDataInfo)
+					{
+						*BulkDataInfo = *ShippedBulkDataInfo;
+					}
+
+					CookStats.TFCTextureAlreadySaved += (QWORD)ShippedBulkDataInfo->SavedBulkDataSizeOnDisk;
+				}
 				// If we have an existing entry and the texture GUIDs match then no TFC update is needed for the mip
-				if( BulkDataInfo && 
+				else if( BulkDataInfo &&
 					(bHasMatchingGuidTFC || !bSrcIsNewerTimeStampTFC))
 				{
 					// use previous bulk data info for setting info
-					Mip.Data.StoreInSeparateFile( 
+					Mip.Data.StoreInSeparateFile(
 						TRUE,
 						BulkDataInfo->SavedBulkDataFlags,
 						BulkDataInfo->SavedElementCount,
@@ -8689,6 +8755,12 @@ UPackage* UCookPackagesCommandlet::LoadPackageForCooking(const TCHAR* Filename)
 		Package = UObject::LoadPackage(NULL, Filename, LOAD_None);
 	}
 
+	// For mod cook: record the source path while the linker is still alive.
+	if (Package && ModCookShippingDir.Len())
+	{
+		ModCookPackageSourcePaths.Set(Package->GetName(), FString(Filename));
+	}
+
 	// if the package loaded, then add it to the package cache, and cache the filetime (unless it's the guid cache or persistent data)
 	if (Package)
 	{
@@ -9111,8 +9183,10 @@ if (Platform & (PLATFORM_Mobile | PLATFORM_MacOSX | PLATFORM_WiiU))
 		Parse(Params, TEXT("DLCName="), DLCName);
 	}
 
-	// mathieu.gauthier: Parse our little TFC suffix
+	// mathieu.gauthier: Parse our little TFC suffix; also accept -tfssuffix= as alias
 	Parse(appCmdLine(),TEXT("PATCHTFCSUFFIX="),PatchTextureFileCacheSuffix);
+	if (!PatchTextureFileCacheSuffix.Len())
+		Parse(appCmdLine(),TEXT("TFSSUFFIX="),PatchTextureFileCacheSuffix);
 
 	if (PatchTextureFileCacheSuffix.Len() && DLCName.Len())
 	{
@@ -9319,6 +9393,66 @@ if (Platform & (PLATFORM_Mobile | PLATFORM_MacOSX | PLATFORM_WiiU))
 
 	bSaveLocalizedCookedPackagesInSubdirectories = FALSE;
 
+	// For mod cooking: store shipping dir in member so CookPackage() can use it for TFC lookups.
+	// -modcook activates this; -shippingdir= points to original CookedPCConsole directory.
+	const UBOOL bIsModCook = (Switches.FindItemIndex(TEXT("MODCOOK")) != INDEX_NONE);
+	if (bIsModCook)
+	{
+		// ModCookShippingDir = directory containing original game TFCs and PCD.
+		// Must be set via -shippingdir= (no default, since our own CookedPCConsole lacks the original PCD).
+		if (!Parse(appCmdLine(), TEXT("SHIPPINGDIR="), ModCookShippingDir))
+		{
+			warnf(NAME_Warning, TEXT("ModCook: -shippingdir= not specified; shipping PCD unavailable, all textures will be re-cooked"));
+		}
+		if (ModCookShippingDir.Len() && !ModCookShippingDir.EndsWith(TEXT("\\")))
+			ModCookShippingDir += TEXT("\\");
+
+		// Load shipping PCD as GShippingCookerData so the cooker can reference original TFC offsets.
+		// The shipping PCD has file version 868 but our engine expects 882. We patch the version
+		// field in a temp copy so the linker accepts it; serialize behavior is unchanged because
+		// VER_ANDROID_ETC_SEPARATED=864 < 868, so CookedTextureFormats was present in both.
+		if (ModCookShippingDir.Len())
+		{
+			const FString ShippingPCDSrc = ModCookShippingDir + GetBulkDataContainerFilename();
+			warnf(TEXT("ModCook: loading shipping PCD from %s"), *ShippingPCDSrc);
+
+			// Create a bare GShippingCookerData object and populate its maps directly
+			// from the raw file bytes, bypassing the UE3 linker (which rejects ver=868).
+			UPackage* ShipPkg = UObject::CreatePackage(NULL, TEXT("ShippingCookerDataPackage"));
+			GShippingCookerData = ConstructObject<UPersistentCookerData>(
+				UPersistentCookerData::StaticClass(), ShipPkg, TEXT("PersistentCookerData"));
+			if (GShippingCookerData)
+			{
+				GShippingCookerData->AddToRoot();
+				if (!GShippingCookerData->LoadShippingMaps(*ShippingPCDSrc))
+				{
+					warnf(NAME_Warning, TEXT("ModCook: shipping PCD unavailable; all textures will be re-cooked into _modded TFC"));
+					GShippingCookerData->RemoveFromRoot();
+					GShippingCookerData = NULL;
+				}
+
+				// Also merge DLC PCD so textures from CookedPCConsoleDLC are recognized as shipped.
+				// Derive DLC dir from shippingdir: ..\CookedPCConsoleDLC\ relative to CookedPCConsole\.
+				if (GShippingCookerData)
+				{
+					// ModCookShippingDir ends with '\', go up one level then into CookedPCConsoleDLC
+					FString DLCDir = ModCookShippingDir + TEXT("..\\CookedPCConsoleDLC\\");
+					const FString DLCPCDSrc = DLCDir + GetBulkDataContainerFilename();
+					if (GFileManager->FileSize(*DLCPCDSrc) > 0)
+					{
+						warnf(TEXT("ModCook: merging DLC shipping PCD from %s"), *DLCPCDSrc);
+						// LoadShippingMaps appends to existing maps — DLC entries are merged in.
+						GShippingCookerData->LoadShippingMaps(*DLCPCDSrc);
+					}
+					else
+					{
+						warnf(NAME_Warning, TEXT("ModCook: DLC shipping PCD not found at %s"), *DLCPCDSrc);
+					}
+				}
+			}
+		}
+	}
+
 	// Force a full recook if PersistentCookerData doesn't exist or is outdated.
 	FString PersistentCookerDataFilename = CookedDir + GetBulkDataContainerFilename();
 	UBOOL bPersistentCookerDataExists = FALSE;
@@ -9343,7 +9477,7 @@ if (Platform & (PLATFORM_Mobile | PLATFORM_MacOSX | PLATFORM_WiiU))
 				// Collect garbage to make sure the file gets closed.
 				UObject::CollectGarbage(RF_Native);
 			}
-			if (!bFileExists && PatchTextureFileCacheSuffix.Len())
+			if (!bFileExists && PatchTextureFileCacheSuffix.Len() && !ModCookShippingDir.Len())
 			{
 				appErrorf(TEXT("The -patchtfcsuffix option only makes sense if you are doing a recook. PersistentCookerDataPackage not found."));
 				return FALSE;
@@ -9374,6 +9508,29 @@ if (Platform & (PLATFORM_Mobile | PLATFORM_MacOSX | PLATFORM_WiiU))
 					// PersistentCookerData so that it saves to the mod directory 
 					PersistentCookerData->SetFilename( *PersistentCookerDataFilename );
 				}
+				else if (ModCookShippingDir.Len())
+				{
+					// Mod cook: create a fresh empty PCD in our output directory.
+					// Delete any stale/incompatible PCD first (e.g. copied from original shipping dir).
+					// Textures are referenced from original TFCs via bHasMatchingGuidTFC logic (file presence check).
+					if (GFileManager->FileSize(*PersistentCookerDataFilename) > 0)
+					{
+						warnf(NAME_Log, TEXT("ModCook: deleting stale PCD at %s"), *PersistentCookerDataFilename);
+						GFileManager->Delete(*PersistentCookerDataFilename, FALSE, TRUE);
+					}
+					warnf(NAME_Log, TEXT("ModCook: creating fresh PCD at %s"), *PersistentCookerDataFilename);
+					if (GGameCookerHelper)
+						PersistentCookerData = GGameCookerHelper->CreateInstance(*PersistentCookerDataFilename, TRUE);
+					else
+						PersistentCookerData = UPersistentCookerData::CreateInstance(*PersistentCookerDataFilename, TRUE);
+					if (!PersistentCookerData)
+					{
+						appDebugMessagef(TEXT("ModCook: failed to create PCD at %s"), *PersistentCookerDataFilename);
+						return FALSE;
+					}
+					// Do not force a full recook for mod cook — our mod dir starts fresh intentionally.
+					bPersistentCookerDataExists = TRUE;
+				}
 	// we never want to delete files in a shipping build unless the user specifically said so
 	#if !SHIPPING_PC_GAME
 				else
@@ -9381,8 +9538,8 @@ if (Platform & (PLATFORM_Mobile | PLATFORM_MacOSX | PLATFORM_WiiU))
 					// Make sure we delete all cooked files so that they will be properly recooked
 					// even if we abort cooking for whatever reason but PersistentCookerData has been updated on disk.
 					warnf(NAME_Log, TEXT("%s is out of date. Forcing a full recook."), *PersistentCookerDataFilename );
+					bForceFullRecook = TRUE;
 				}
-				bForceFullRecook = TRUE;
 	#endif
 			}
 			else
@@ -11799,6 +11956,45 @@ void UCookPackagesCommandlet::SaveCookedPackage(UPackage* Package, UObject* Base
 				GCallbackEvent->Register(CALLBACK_PackageSaveCleanupShaderCache,&CleanupShaderCacheCallbackHandler);
 			}
 			UObject::SavePackage( Package, Base, TopLevelFlags, DstFilename, GWarn, ConformBase, ShouldByteSwapData() );
+
+			// Log per-class size breakdown for mod cooking diagnostics.
+			if (ParseParam(appCmdLine(), TEXT("LOGPKGSIZES")))
+			{
+				// Per-class: count and serialized byte size (via FBufferArchive dry-serialize).
+				TMap<FString, INT> ClassCounts;
+				TMap<FString, INT> ClassBytes;
+				for (TObjectIterator<UObject> It; It; ++It)
+				{
+					if (It->IsIn(Package) && It->HasAnyFlags(RF_TagExp))
+					{
+						FString ClassName = It->GetClass()->GetName();
+						// Serialize the object into a temporary buffer to measure its size.
+						FBufferArchive TempAr;
+						It->Serialize(TempAr);
+						INT ObjBytes = TempAr.Num();
+
+						INT* ExistingCount = ClassCounts.Find(ClassName);
+						if (ExistingCount) (*ExistingCount)++;
+						else ClassCounts.Set(ClassName, 1);
+
+						INT* ExistingBytes = ClassBytes.Find(ClassName);
+						if (ExistingBytes) (*ExistingBytes) += ObjBytes;
+						else ClassBytes.Set(ClassName, ObjBytes);
+					}
+				}
+				INT FileSize = (INT)GFileManager->FileSize(DstFilename);
+				warnf(TEXT("PKGSIZE: %s = %d KB"), *Package->GetName(), FileSize/1024);
+				// Sort by serialized bytes descending.
+				TArray<FString> Keys; ClassCounts.GenerateKeyArray(Keys);
+				for (INT i=0; i<Keys.Num()-1; i++)
+					for (INT j=i+1; j<Keys.Num(); j++)
+						if (ClassBytes.FindRef(Keys(j)) > ClassBytes.FindRef(Keys(i)))
+							Exchange(Keys(i), Keys(j));
+				for (INT i=0; i<Keys.Num(); i++)
+					warnf(TEXT("  PKGSIZE:   %5d x %-40s %6d KB"),
+						ClassCounts.FindRef(Keys(i)), *Keys(i), ClassBytes.FindRef(Keys(i))/1024);
+			}
+
 			if (bSkipStartupObjectDetermination == FALSE)
 			{
 				// Restore 
@@ -15388,6 +15584,405 @@ IMPLEMENT_CLASS(UCookPackagesCommandlet)
 /*-----------------------------------------------------------------------------
 	UPersistentCookerData implementation.
 -----------------------------------------------------------------------------*/
+
+// ---------------------------------------------------------------------------
+// Raw binary reader helpers (no UE3 linker involved)
+// ---------------------------------------------------------------------------
+namespace PCDRaw
+{
+	struct FReader
+	{
+		const BYTE* Data;
+		INT         Pos;
+		INT         Size;
+		UBOOL       bError;
+		INT         Ver; // file version read from header
+
+		FReader(const TArray<BYTE>& Bytes) : Data(&Bytes(0)), Pos(0), Size(Bytes.Num()), bError(FALSE), Ver(0) {}
+
+		void Read(void* Dst, INT Count)
+		{
+			if (bError || Pos + Count > Size) { bError = TRUE; return; }
+			appMemcpy(Dst, Data + Pos, Count);
+			Pos += Count;
+		}
+		void Skip(INT Count) { if (bError || Pos + Count > Size) { bError = TRUE; return; } Pos += Count; }
+
+		INT  ReadInt32()  { INT  v=0; Read(&v,4); return v; }
+		DWORD ReadUInt32() { DWORD v=0; Read(&v,4); return v; }
+		QWORD ReadUInt64() { QWORD v=0; Read(&v,8); return v; }
+		DOUBLE ReadDouble() { DOUBLE v=0; Read(&v,8); return v; }
+		WORD ReadWord() { WORD v=0; Read(&v,2); return v; }
+
+		FString ReadFString()
+		{
+			INT Len = ReadInt32();
+			if (bError || Len == 0) return TEXT("");
+			if (Len > 0)
+			{
+				TArray<ANSICHAR> Buf; Buf.Empty(Len); Buf.Add(Len);
+				Read(Buf.GetData(), Len);
+				return FString(ANSI_TO_TCHAR(Buf.GetData()));
+			}
+			// Unicode
+			INT ULen = -Len;
+			TArray<WORD> Buf; Buf.Empty(ULen); Buf.Add(ULen);
+			Read(Buf.GetData(), ULen * 2);
+			return FString((TCHAR*)Buf.GetData());
+		}
+
+		// Read FName as stored in PCD data payload (index + number, resolved via names table)
+		FName ReadFName(const TArray<FString>& Names)
+		{
+			INT Idx = ReadInt32();
+			/*number=*/ReadInt32();
+			if (bError || Idx < 0 || Idx >= Names.Num()) return NAME_None;
+			return FName(*Names(Idx));
+		}
+
+		FGuid ReadGuid()
+		{
+			FGuid G(0,0,0,0);
+			Read(&G, 16);
+			return G;
+		}
+	};
+
+	// Read name table from header
+	static UBOOL ReadNameTable(FReader& R, INT NameCount, INT NameOffset, TArray<FString>& OutNames)
+	{
+		R.Pos = NameOffset;
+		OutNames.Empty(NameCount);
+		for (INT i = 0; i < NameCount && !R.bError; i++)
+		{
+			FString N = R.ReadFString();
+			R.Skip(8); // EObjectFlags qword (present in ver>=865, and 868>=865)
+			OutNames.AddItem(N);
+		}
+		return !R.bError;
+	}
+
+	// Read TMap<FString, V> where V is serialized by its operator<<
+	template<typename V>
+	static void ReadTMapFStringV(FReader& R, TMap<FString,V>& OutMap, const TArray<FString>& Names)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			FString Key = R.ReadFString();
+			V Val;
+			ReadValue(R, Val, Names);
+			OutMap.Set(Key, Val);
+		}
+	}
+
+	static void ReadValue(FReader& R, FCookedBulkDataInfo& V, const TArray<FString>& Names)
+	{
+		V.SavedBulkDataFlags      = R.ReadUInt32();
+		V.SavedElementCount       = R.ReadInt32();
+		V.SavedBulkDataOffsetInFile = R.ReadInt32();
+		V.SavedBulkDataSizeOnDisk = R.ReadInt32();
+		V.TextureFileCacheName    = R.ReadFName(Names);
+	}
+
+	static void ReadValue(FReader& R, FCookedTextureFileCacheInfo& V, const TArray<FString>& Names)
+	{
+		V.TextureFileCacheGuid = R.ReadGuid();
+		INT FNameIdx = R.ReadInt32(); INT FNameNum = R.ReadInt32();
+		if (!R.bError)
+		{
+			if (FNameIdx < 0 || FNameIdx >= Names.Num())
+			{
+				warnf(NAME_Warning, TEXT("LoadShippingMaps: TFCInfo FName index %d out of range [0,%d) at pos %d"), FNameIdx, Names.Num(), R.Pos);
+				R.bError = TRUE;
+			}
+			else
+			{
+				V.TextureFileCacheName = FName(*Names(FNameIdx));
+			}
+		}
+		V.LastSaved = R.ReadDouble();
+	}
+
+	// Generic TMap<FString, FString> skip (used for FilenameToTimeMap via DOUBLE values - skip only)
+	static void SkipTMapFStringDouble(FReader& R)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			R.ReadFString();   // key
+			R.ReadDouble();    // value
+		}
+	}
+
+	static void SkipTMapFStringDouble2(FReader& R) { SkipTMapFStringDouble(R); }
+
+	static void SkipTMapFStringInt(FReader& R)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			R.ReadFString();
+			R.ReadInt32();
+		}
+	}
+
+	// TSet<FString> serializes as TArray<FString> (just count + N strings, no extra data)
+	static void SkipTSetFString(FReader& R)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+			R.ReadFString();
+	}
+
+	// TMap<FString, TMap<FString,FString>> — CookedStartupObjects
+	static void SkipTMapFStringMapFStringFString(FReader& R)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			R.ReadFString(); // outer key
+			INT Inner = R.ReadInt32(); // inner map count
+			if (R.bError || Inner < 0 || Inner > 1000000) { R.bError=TRUE; return; }
+			for (INT j = 0; j < Inner && !R.bError; j++)
+			{
+				R.ReadFString(); // inner key
+				R.ReadFString(); // inner value
+			}
+		}
+	}
+
+	// TMap<FString, TMap<FString, TMap<FString,FString>>> — CookedStartupObjectsLoc
+	static void SkipTMapFStringMapFStringMapFStringFString(FReader& R)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			R.ReadFString(); // outer key
+			INT Mid = R.ReadInt32();
+			if (R.bError || Mid < 0 || Mid > 1000000) { R.bError=TRUE; return; }
+			for (INT j = 0; j < Mid && !R.bError; j++)
+			{
+				R.ReadFString(); // mid key
+				INT Inner = R.ReadInt32();
+				if (R.bError || Inner < 0 || Inner > 1000000) { R.bError=TRUE; return; }
+				for (INT k = 0; k < Inner && !R.bError; k++)
+				{
+					R.ReadFString();
+					R.ReadFString();
+				}
+			}
+		}
+	}
+
+	// TMap<FString,TArray<BYTE>>
+	static void SkipTMapFStringTArrayByte(FReader& R)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			R.ReadFString();
+			INT BCount = R.ReadInt32();
+			R.Skip(BCount);
+		}
+	}
+
+	// TMap<FString, FCookedTextureUsageInfo> — skip
+	static void SkipTMapFStringCookedTextureUsageInfo(FReader& R)
+	{
+		// FCookedTextureUsageInfo: TArray<FString> TextureGroups (4+n*fstring), 2x INT
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			R.ReadFString(); // key
+			// FCookedTextureUsageInfo: just skip safely by reading known fields
+			// TextureGroups TArray<FString>
+			INT GCount = R.ReadInt32();
+			for (INT g = 0; g < GCount && !R.bError; g++) R.ReadFString();
+			R.ReadInt32(); // SizeX
+			R.ReadInt32(); // SizeY
+		}
+	}
+
+	// TMap<FString, FForceCookedInfo> — skip
+	static void SkipTMapFStringForceCookedInfo(FReader& R)
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 1000000) { R.bError=TRUE; return; }
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			R.ReadFString(); // key
+			R.ReadInt32();   // FForceCookedInfo: single INT bShouldForceCook
+		}
+	}
+
+	// CookedTextureFormats is a single DWORD (guarded by VER_ANDROID_ETC_SEPARATED)
+	static void SkipCookedTextureFormats(FReader& R)
+	{
+		R.ReadUInt32();
+	}
+} // namespace PCDRaw
+
+/**
+ * Reads CookedBulkDataInfoMap and CookedTextureFileCacheInfoMap directly from a raw .upk file,
+ * bypassing the UE3 linker. This allows loading a shipping PCD of a different package version.
+ */
+UBOOL UPersistentCookerData::LoadShippingMaps( const TCHAR* Filename )
+{
+	TArray<BYTE> RawBytes;
+	if (!appLoadFileToArray(RawBytes, Filename) || RawBytes.Num() < 64)
+	{
+		warnf(NAME_Warning, TEXT("LoadShippingMaps: failed to read %s"), Filename);
+		return FALSE;
+	}
+
+	PCDRaw::FReader R(RawBytes);
+
+	// --- Parse UPK header to find name table and export serial offset ---
+	DWORD Tag = R.ReadUInt32();
+	if (Tag != 0x9E2A83C1u) { warnf(NAME_Warning, TEXT("LoadShippingMaps: bad UPK tag")); return FALSE; }
+
+	DWORD VerRaw    = R.ReadUInt32();
+	INT   FileVer   = (INT)(VerRaw & 0xFFFF);
+	R.Ver = FileVer;
+
+	/*TotalHeaderSize=*/ R.ReadInt32();
+	R.ReadFString(); // FolderName
+	/*PackageFlags=*/    R.ReadUInt32();
+
+	INT NameCount  = R.ReadInt32(); INT NameOffset  = R.ReadInt32();
+	INT ExpCount   = R.ReadInt32(); INT ExpOffset   = R.ReadInt32();
+	INT ImpCount   = R.ReadInt32(); INT ImpOffset   = R.ReadInt32();
+	/*DependsOffset=*/   R.ReadInt32();
+
+	// ver >= VER_ADDED_CROSSLEVEL_REFERENCES (516)
+	if (FileVer >= 516) R.Skip(12);
+	// ver >= VER_ASSET_THUMBNAILS_IN_PACKAGES (584)
+	if (FileVer >= 584) R.Skip(4);
+
+	R.Skip(16); // Guid
+	INT GenCount = R.ReadInt32();
+	R.Skip(GenCount * 12); // FGenerationInfo: 3x INT each
+
+	/*EngineVersion=*/        R.ReadUInt32();
+	/*CookedContentVersion=*/ R.ReadUInt32();
+
+	if (R.bError) { warnf(NAME_Warning, TEXT("LoadShippingMaps: header parse error")); return FALSE; }
+
+	// --- Read name table ---
+	TArray<FString> Names;
+	if (!PCDRaw::ReadNameTable(R, NameCount, NameOffset, Names))
+	{
+		warnf(NAME_Warning, TEXT("LoadShippingMaps: failed to read name table")); return FALSE;
+	}
+
+	// --- Find PersistentCookerData export (first export with serial data) ---
+	if (ExpCount < 1) { warnf(NAME_Warning, TEXT("LoadShippingMaps: no exports")); return FALSE; }
+
+	R.Pos = ExpOffset; R.bError = FALSE;
+	// FObjectExport: ClassIndex(4) SuperIndex(4) OuterIndex(4) ObjectName(8) Archetype(4)
+	//               ObjFlagsHi(4) ObjFlagsLo(4) SerialSize(4) SerialOffset(4)
+	//               ExportFlags(4) NetObjectCount(4) NetObjects(4*N) GUID(16) Unknown(4)
+	R.Skip(4+4+4+8+4+4+4); // ClassIdx SuperIdx OuterIdx ObjName Archetype Flags*2
+	INT SerialSize   = R.ReadInt32();
+	INT SerialOffset = R.ReadInt32();
+
+	if (R.bError || SerialSize <= 0 || SerialOffset <= 0)
+	{
+		warnf(NAME_Warning, TEXT("LoadShippingMaps: bad export entry")); return FALSE;
+	}
+
+	// --- Parse the serialized UPersistentCookerData payload ---
+	// UObject::Serialize writes before our fields:
+	//   SerializeNetIndex: INT (4 bytes)
+	//   SerializeScriptProperties (tagged): NAME_None terminator = FName (8 bytes: name_index + number)
+	// Total prefix = 12 bytes.
+	R.Pos = SerialOffset; R.bError = FALSE;
+	R.Skip(4);  // NetIndex
+	R.Skip(8);  // NAME_None tagged property terminator
+
+	// Mirror of UPersistentCookerData::Serialize (loading path, ver=868):
+	warnf(TEXT("LoadShippingMaps: SerialOffset=%d SerialSize=%d FileSize=%d"), SerialOffset, SerialSize, R.Size);
+	// Dump first 16 bytes at serial offset for diagnosis
+	if (SerialOffset + 16 <= R.Size)
+	{
+		const BYTE* p = R.Data + SerialOffset;
+		warnf(TEXT("LoadShippingMaps: bytes[0..15] = %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X"),
+			p[0],p[1],p[2],p[3], p[4],p[5],p[6],p[7], p[8],p[9],p[10],p[11], p[12],p[13],p[14],p[15]);
+	}
+	// CookedStartupObjects: TMap<FString, TMap<FString,FString>>
+	PCDRaw::SkipTMapFStringMapFStringFString(R);
+	// CookedStartupObjectsLoc: TMap<FString, TMap<FString, TMap<FString,FString>>>
+	PCDRaw::SkipTMapFStringMapFStringMapFStringFString(R);
+	// AlreadyHandledStartupMaterials: TSet<FString>
+	PCDRaw::SkipTSetFString(R);
+	// AlreadyHandledStartupMaterialInstances: TSet<FString>
+	PCDRaw::SkipTSetFString(R);
+
+	// CookedBulkDataInfoMap: TMap<FString, FCookedBulkDataInfo>  <-- WANT THIS
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 2000000) { warnf(NAME_Warning, TEXT("LoadShippingMaps: bad BulkDataInfoMap count %d"), Count); return FALSE; }
+		warnf(TEXT("LoadShippingMaps: reading %d bulk data entries (merging into %d existing)"), Count, CookedBulkDataInfoMap.Num());
+		// Do not Empty if map already has entries — this allows merging multiple PCD files (e.g. base + DLC).
+		if (CookedBulkDataInfoMap.Num() == 0)
+			CookedBulkDataInfoMap.Empty(Count);
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			FString Key = R.ReadFString();
+			FCookedBulkDataInfo Val;
+			PCDRaw::ReadValue(R, Val, Names);
+			CookedBulkDataInfoMap.Set(Key, Val);
+		}
+	}
+	if (R.bError) { warnf(NAME_Warning, TEXT("LoadShippingMaps: error after BulkDataInfoMap")); return FALSE; }
+
+	// FilenameToTimeMap: TMap<FString, DOUBLE>
+	PCDRaw::SkipTMapFStringDouble(R);
+	// TextureFileCacheWaste: TMap<FString, DOUBLE> (same shape)
+	PCDRaw::SkipTMapFStringDouble2(R);
+	// FilenameToCookedVersion: TMap<FString, INT>
+	PCDRaw::SkipTMapFStringInt(R);
+	// NOTE: CookedTextureFormats (DWORD, guarded by VER_ANDROID_ETC_SEPARATED=864) was NOT
+	// written by the original 868 engine into this file — skip it.
+
+	// CookedTextureFileCacheInfoMap: TMap<FString, FCookedTextureFileCacheInfo>  <-- WANT THIS
+	{
+		INT Count = R.ReadInt32();
+		if (R.bError || Count < 0 || Count > 2000000) { warnf(NAME_Warning, TEXT("LoadShippingMaps: bad TFCInfoMap count %d"), Count); return FALSE; }
+		warnf(TEXT("LoadShippingMaps: reading %d TFC info entries (merging into %d existing)"), Count, CookedTextureFileCacheInfoMap.Num());
+		if (CookedTextureFileCacheInfoMap.Num() == 0)
+			CookedTextureFileCacheInfoMap.Empty(Count);
+		for (INT i = 0; i < Count && !R.bError; i++)
+		{
+			INT EntryPos = R.Pos;
+			FString Key = R.ReadFString();
+			FCookedTextureFileCacheInfo Val;
+			PCDRaw::ReadValue(R, Val, Names);
+			if (R.bError) { warnf(NAME_Warning, TEXT("LoadShippingMaps: TFCInfo error at entry %d, key='%s', pos=%d"), i, *Key, EntryPos); break; }
+			CookedTextureFileCacheInfoMap.Set(Key, Val);
+		}
+	}
+	if (R.bError)
+	{
+		// TFCInfoMap format is complex/versioned; partial failure is acceptable.
+		// BulkDataInfoMap (already loaded) is sufficient for shipped-texture detection.
+		warnf(TEXT("LoadShippingMaps: TFCInfoMap parse failed (only %d entries loaded); BulkDataInfoMap is OK"),
+			CookedTextureFileCacheInfoMap.Num());
+	}
+
+	warnf(TEXT("LoadShippingMaps: OK — %d bulk, %d TFC entries"),
+		CookedBulkDataInfoMap.Num(), CookedTextureFileCacheInfoMap.Num());
+	return CookedBulkDataInfoMap.Num() > 0;
+}
 
 /**
  * Create an instance of this class given a filename. First try to load from disk and if not found

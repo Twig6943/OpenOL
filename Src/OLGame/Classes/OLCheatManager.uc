@@ -18,6 +18,7 @@ var config bool bDebugAIPositions;
 var config bool bSuppressAllMessages;
 
 var bool bPausedForFreeCam;
+var bool bFreeCamInspector;  // Draw actor inspector overlay while in FreeCam
 var string DebugSoundEnvFilter;
 
 var float NextSpikeTime;
@@ -942,4 +943,26 @@ exec function KillAllEnemies()
 exec function SetGameSpeed(float Speed)
 {
     WorldInfo.Game.SetGameSpeed(Speed);
+}
+
+native function SetShowEditorSprites(bool bShow);
+
+exec function ToggleFreeCamInspector()
+{
+    bFreeCamInspector = !bFreeCamInspector;
+    SetShowEditorSprites(bFreeCamInspector);
+}
+
+exec function ToggleGrain()
+{
+    local OLFXManager FX;
+    local OLUberPostProcessEffect Effect;
+    FX = class'OLFXManager'.static.GetFXManager();
+    if (FX == None || FX.CurrentUberPostEffect == None)
+        return;
+    Effect = FX.CurrentUberPostEffect;
+    if (Effect.GrainOpacity > 0.0)
+        Effect.GrainOpacity = 0.0;
+    else
+        Effect.GrainOpacity = Effect.Default.GrainOpacity;
 }

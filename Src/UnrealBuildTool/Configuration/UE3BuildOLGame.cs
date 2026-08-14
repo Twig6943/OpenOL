@@ -16,7 +16,7 @@ namespace UnrealBuildTool
 		{
 			return "OLGame";
 		}
-
+		
 		/** Returns a subplatform (e.g. dll) to disambiguate object files */
 		public string GetSubPlatform()
 		{
@@ -67,7 +67,6 @@ namespace UnrealBuildTool
         {
             GlobalEnvironment.IncludePaths.Add("UDKBase/Inc");
             GlobalEnvironment.IncludePaths.Add("OLGame/Inc");
-            GlobalEnvironment.IncludePaths.Add("Multiplayer/Inc");
 
             if (UE3BuildConfiguration.bBuildEditor &&
                 (GlobalEnvironment.TargetPlatform == CPPTargetPlatform.Win32 || GlobalEnvironment.TargetPlatform == CPPTargetPlatform.Win64))
@@ -75,7 +74,7 @@ namespace UnrealBuildTool
                 GlobalEnvironment.IncludePaths.Add("OLEditor/Inc");
             }
         }
-
+		
 		/** Allows the game to add any Platform/Configuration environment settings before building */
         public void GetGameSpecificPlatformConfigurationEnvironment(CPPEnvironment GlobalEnvironment, LinkEnvironment FinalLinkEnvironment)
         {
@@ -93,7 +92,7 @@ namespace UnrealBuildTool
 		{
 			GameProjects.Add(new UE3ProjectDesc("UDKBase/UDKBase.vcxproj"));
             GameCPPEnvironment.IncludePaths.Add("UDKBase/Inc");
-
+	
 			GameProjects.Add(new UE3ProjectDesc("OLGame/OLGame.vcxproj"));
             GameCPPEnvironment.IncludePaths.Add("OLGame/Inc");
             GameCPPEnvironment.IncludePaths.Add("Multiplayer/Inc");

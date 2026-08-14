@@ -6,6 +6,13 @@ IMPLEMENT_CLASS(UOLCheatManager);
 UBOOL GDelayedSingleStep = FALSE;
 UBOOL GDelayedPause = FALSE;
 
+extern UBOOL GShowEditorSprites;
+
+void UOLCheatManager::SetShowEditorSprites(UBOOL bShow)
+{
+    GShowEditorSprites = bShow;
+}
+
 UOLCheatManager* UOLCheatManager::GetCheatManager()
 {
 	return Utils::GetCheatManager();

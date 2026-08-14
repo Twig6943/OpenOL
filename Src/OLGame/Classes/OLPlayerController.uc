@@ -380,6 +380,17 @@ var rotator	DebugCamRot;
 var vector	DebugCamPos;
 var float	DebugFreeCamSpeed;
 var float	DebugFreeCamFOV;
+var int		InspectorHitIndex;  // Current selection index for Smart Trace cycling
+
+struct native InspectorHit
+{
+	var Actor                  HitActor;
+	var StaticMeshComponent    HitSMC;
+	var SkeletalMeshComponent  HitSKMC;
+	var vector                 HitLoc;
+	var float                  Dist;
+};
+var array<InspectorHit> InspectorHits;  // All hits along the ray this frame
 var bool		bSlowDownFPS;
 var float	SlowDownFactor;
 // Set by MultiplayerController while applying a remote door event — suppresses OLSeqAct_Door actions.
@@ -620,6 +631,37 @@ simulated exec function StopZoom()
 {
 	ZoomInput = 0;
 	Inputs.bStartedActiveZoom = false;
+}
+
+exec function InspectorScrollUp()
+{
+    InspectorHitIndex++;
+    ClientMessage("Inspector idx: " $ InspectorHitIndex $ " / hits: " $ InspectorHits.Length);
+}
+
+exec function InspectorScrollDown()
+{
+    InspectorHitIndex--;
+    ClientMessage("Inspector idx: " $ InspectorHitIndex $ " / hits: " $ InspectorHits.Length);
+}
+
+exec function FreeCamSpeedUp()
+{
+    if (!bDebugFreeCam)
+        return;
+    DebugFreeCamSpeed *= 1.25;
+}
+
+exec function FreeCamSpeedDown()
+{
+    if (!bDebugFreeCam)
+        return;
+    DebugFreeCamSpeed *= 0.8;
+}
+
+exec function FreeCamSpeedReset()
+{
+    DebugFreeCamSpeed = default.DebugFreeCamSpeed;
 }
 
 exec function PressedReloadBatteries()
@@ -921,6 +963,322 @@ function DrawHUD( HUD H )
 
 	olHUD = OLHUD(H);
 	olHUD.Draw();
+
+	if (bDebugFreeCam && OLCheatManager(CheatManager) != None && OLCheatManager(CheatManager).bFreeCamInspector)
+		DrawInspectorTriggerLabels(H);
+
+	if (bDebugFreeCam && OLCheatManager(CheatManager) != None && OLCheatManager(CheatManager).bFreeCamInspector)
+		DrawFreeCamInspector(H);
+}
+
+// Returns the full path of an object including the top-level package: "Package.Group.Name".
+// PathName() alone omits the package when called from script, so we walk Outer manually.
+function string GetObjectFullPath(Object Obj)
+{
+	local string Path;
+	local Object O;
+
+	if (Obj == None)
+		return "None";
+
+	Path = string(Obj.Name);
+	O = Obj.Outer;
+	while (O != None)
+	{
+		Path = string(O.Name) $ "." $ Path;
+		O = O.Outer;
+	}
+	return Path;
+}
+
+// Draw name labels at the screen-projected location of all Triggers and TriggerVolumes.
+function DrawInspectorTriggerLabels(HUD H)
+{
+    local Actor A;
+    local vector ScreenPos;
+    local Canvas C;
+
+    C = H.Canvas;
+    C.Font = H.GetFontSizeIndex(0);
+
+    foreach AllActors(class'Actor', A)
+    {
+        if (!A.IsA('Trigger') && !A.IsA('TriggerVolume'))
+            continue;
+
+        ScreenPos = C.Project(A.Location);
+        if (ScreenPos.Z <= 0)
+            continue;
+
+        C.SetDrawColor(50, 255, 100, 200);
+        C.SetPos(ScreenPos.X, ScreenPos.Y);
+        C.DrawText(string(A.Name));
+    }
+}
+
+// Draw an actor inspector overlay in the top-right corner while FreeCam is active.
+// Traces from the camera position along its view direction and reports the hit actor.
+// Uses per-component complex collision so meshes without physics collision are hit too.
+function DrawFreeCamInspector(HUD H)
+{
+	local vector TraceEnd, HitLoc, HitNorm;
+	local TraceHitInfo HitInfo;
+	local Actor A, HitActor, TriggerHit;
+	local StaticMeshComponent SMC, HitSMC;
+	local SkeletalMeshComponent SKMC, HitSKMC;
+	local MaterialInterface Mat;
+	local MaterialInstanceConstant MIC;
+	local int MatIdx, TexIdx, i, SelIdx;
+	local Box ActorBox;
+	local vector BoxCenter, BoxExtent, TriggerHitLoc, TriggerHitNorm;
+	local float X, Y, LineH, Dist;
+	local Canvas C;
+	local string Line;
+	local InspectorHit Entry;
+
+	C = H.Canvas;
+
+	// Collect all hits along the ray into InspectorHits array.
+	TraceEnd = DebugCamPos + vector(DebugCamRot) * 50000.0;
+	InspectorHits.Length = 0;
+
+	foreach AllActors(class'Actor', A)
+	{
+		foreach A.ComponentList(class'StaticMeshComponent', SMC)
+		{
+			if (SMC.StaticMesh == None || SMC.HiddenGame)
+				continue;
+			if (TraceComponent(HitLoc, HitNorm, SMC, TraceEnd, DebugCamPos,, HitInfo, true))
+			{
+				Entry.HitActor = A;
+				Entry.HitSMC   = SMC;
+				Entry.HitSKMC  = None;
+				Entry.HitLoc   = HitLoc;
+				Entry.Dist     = VSize(HitLoc - DebugCamPos);
+				InspectorHits.AddItem(Entry);
+			}
+		}
+		foreach A.ComponentList(class'SkeletalMeshComponent', SKMC)
+		{
+			if (SKMC.SkeletalMesh == None || SKMC.HiddenGame)
+				continue;
+			if (TraceComponent(HitLoc, HitNorm, SKMC, TraceEnd, DebugCamPos,, HitInfo, true))
+			{
+				Entry.HitActor = A;
+				Entry.HitSMC   = None;
+				Entry.HitSKMC  = SKMC;
+				Entry.HitLoc   = HitLoc;
+				Entry.Dist     = VSize(HitLoc - DebugCamPos);
+				InspectorHits.AddItem(Entry);
+			}
+		}
+	}
+
+	// Collision trace for Triggers/TriggerVolumes (invisible, no mesh).
+	TriggerHit = Trace(TriggerHitLoc, TriggerHitNorm, TraceEnd, DebugCamPos, true);
+	if (TriggerHit != None && (TriggerHit.IsA('Trigger') || TriggerHit.IsA('TriggerVolume')))
+	{
+		Entry.HitActor = TriggerHit;
+		Entry.HitSMC   = None;
+		Entry.HitSKMC  = None;
+		Entry.HitLoc   = TriggerHitLoc;
+		Entry.Dist     = VSize(TriggerHitLoc - DebugCamPos);
+		InspectorHits.AddItem(Entry);
+	}
+
+	// Sort by distance (bubble sort — list is small).
+	for (i = 0; i < InspectorHits.Length - 1; i++)
+	{
+		if (InspectorHits[i].Dist > InspectorHits[i + 1].Dist)
+		{
+			Entry              = InspectorHits[i];
+			InspectorHits[i]   = InspectorHits[i + 1];
+			InspectorHits[i+1] = Entry;
+		}
+	}
+
+	// Clamp index and pick selected hit.
+	if (InspectorHits.Length == 0)
+	{
+		// nothing hit
+		HitActor = None;
+		HitSMC   = None;
+		HitSKMC  = None;
+		HitLoc   = vect(0,0,0);
+	}
+	else
+	{
+		if (InspectorHitIndex < 0) InspectorHitIndex = 0;
+		SelIdx   = InspectorHitIndex % InspectorHits.Length;
+		HitActor = InspectorHits[SelIdx].HitActor;
+		HitSMC   = InspectorHits[SelIdx].HitSMC;
+		HitSKMC  = InspectorHits[SelIdx].HitSKMC;
+		HitLoc   = InspectorHits[SelIdx].HitLoc;
+	}
+
+	// Overlay box: top-right corner, 460px wide
+	LineH = 16.0;
+	X = C.ClipX - 470.0;
+	Y = 10.0;
+
+	C.Font = H.GetFontSizeIndex(0);
+
+	// Helper macro: draw one text line and advance Y
+	// (UnrealScript has no macros; we write it inline below)
+
+	if (HitActor == None)
+	{
+		C.SetDrawColor(200, 200, 200, 200);
+		C.SetPos(X, Y);
+		C.DrawText("[FreeCam Inspector] No hit");
+		return;
+	}
+
+	// ---- Header ----
+	C.SetDrawColor(255, 220, 80, 230);
+	C.SetPos(X, Y);
+	C.DrawText("[FreeCam Inspector]  " $ (SelIdx + 1) $ "/" $ InspectorHits.Length $ "  (scroll to cycle)");
+	Y += LineH;
+
+	// ---- Class ----
+	C.SetDrawColor(180, 255, 180, 220);
+	C.SetPos(X, Y);
+	C.DrawText("Class:    " $ HitActor.Class);
+	Y += LineH;
+
+	// ---- Name / Tag ----
+	C.SetDrawColor(220, 220, 220, 220);
+	C.SetPos(X, Y);
+	C.DrawText("Name:     " $ HitActor.Name);
+	Y += LineH;
+
+	// ---- Hit Component ----
+	if (HitSMC != None)
+	{
+		C.SetDrawColor(255, 220, 100, 220);
+		C.SetPos(X, Y);
+		C.DrawText("Component: " $ HitSMC.Name);
+		Y += LineH;
+	}
+	else if (HitSKMC != None)
+	{
+		C.SetDrawColor(100, 220, 255, 220);
+		C.SetPos(X, Y);
+		C.DrawText("Component: " $ HitSKMC.Name);
+		Y += LineH;
+	}
+
+	C.SetPos(X, Y);
+	C.DrawText("Tag:      " $ HitActor.Tag);
+	Y += LineH;
+
+	// ---- Location / Distance ----
+	C.SetPos(X, Y);
+	C.DrawText("Location: " $ int(HitActor.Location.X) $ ", " $ int(HitActor.Location.Y) $ ", " $ int(HitActor.Location.Z));
+	Y += LineH;
+
+	C.SetPos(X, Y);
+	C.DrawText("Distance: " $ int(VSize(HitLoc - DebugCamPos)));
+	Y += LineH;
+
+	// ---- Hit StaticMeshComponent ----
+	if (HitSMC != None && HitSMC.StaticMesh != None)
+	{
+		Y += 4.0;
+		C.SetDrawColor(130, 200, 255, 220);
+		C.SetPos(X, Y);
+		C.DrawText("Mesh: " $ GetObjectFullPath(HitSMC.StaticMesh));
+		Y += LineH;
+
+		for (MatIdx = 0; MatIdx < 16; MatIdx++)
+		{
+			Mat = HitSMC.GetMaterial(MatIdx);
+			if (Mat == None)
+				continue;
+
+			C.SetDrawColor(200, 200, 200, 200);
+			C.SetPos(X + 12, Y);
+			C.DrawText("Mat[" $ MatIdx $ "]: " $ GetObjectFullPath(Mat));
+			Y += LineH;
+
+			MIC = MaterialInstanceConstant(Mat);
+			if (MIC != None)
+			{
+				for (TexIdx = 0; TexIdx < MIC.TextureParameterValues.Length; TexIdx++)
+				{
+					if (MIC.TextureParameterValues[TexIdx].ParameterValue != None)
+					{
+						C.SetDrawColor(160, 160, 200, 200);
+						C.SetPos(X + 24, Y);
+						Line = "  " $ MIC.TextureParameterValues[TexIdx].ParameterName
+							$ " = " $ MIC.TextureParameterValues[TexIdx].ParameterValue.Name;
+						C.DrawText(Line);
+						Y += LineH;
+					}
+				}
+			}
+		}
+	}
+
+	// ---- Hit SkeletalMeshComponent ----
+	if (HitSKMC != None && HitSKMC.SkeletalMesh != None)
+	{
+		Y += 4.0;
+		C.SetDrawColor(255, 180, 130, 220);
+		C.SetPos(X, Y);
+		C.DrawText("Mesh: " $ GetObjectFullPath(HitSKMC.SkeletalMesh));
+		Y += LineH;
+
+		for (MatIdx = 0; MatIdx < 16; MatIdx++)
+		{
+			Mat = HitSKMC.GetMaterial(MatIdx);
+			if (Mat == None)
+				continue;
+
+			C.SetDrawColor(200, 200, 200, 200);
+			C.SetPos(X + 12, Y);
+			C.DrawText("Mat[" $ MatIdx $ "]: " $ GetObjectFullPath(Mat));
+			Y += LineH;
+
+			MIC = MaterialInstanceConstant(Mat);
+			if (MIC != None)
+			{
+				for (TexIdx = 0; TexIdx < MIC.TextureParameterValues.Length; TexIdx++)
+				{
+					if (MIC.TextureParameterValues[TexIdx].ParameterValue != None)
+					{
+						C.SetDrawColor(160, 160, 200, 200);
+						C.SetPos(X + 24, Y);
+						Line = "  " $ MIC.TextureParameterValues[TexIdx].ParameterName
+							$ " = " $ MIC.TextureParameterValues[TexIdx].ParameterValue.Name;
+						C.DrawText(Line);
+						Y += LineH;
+					}
+				}
+			}
+		}
+	}
+
+	// Draw the hit component's bounding box in the world.
+	if (HitSMC != None)
+	{
+		BoxCenter = HitSMC.Bounds.Origin;
+		BoxExtent = HitSMC.Bounds.BoxExtent;
+		DrawDebugBox(BoxCenter, BoxExtent, 255, 200, 50, false);
+	}
+	else if (HitSKMC != None)
+	{
+		BoxCenter = HitSKMC.Bounds.Origin;
+		BoxExtent = HitSKMC.Bounds.BoxExtent;
+		DrawDebugBox(BoxCenter, BoxExtent, 100, 200, 255, false);
+	}
+	else if (HitActor != None && (HitActor.IsA('Trigger') || HitActor.IsA('TriggerVolume')))
+	{
+		HitActor.GetComponentsBoundingBox(ActorBox);
+		BoxCenter = (ActorBox.Min + ActorBox.Max) * 0.5;
+		BoxExtent = (ActorBox.Max - ActorBox.Min) * 0.5;
+		DrawDebugBox(BoxCenter, BoxExtent, 50, 255, 100, false);
+	}
 }
 
 simulated function DisplayDebug(HUD H, out float out_YL, out float out_YPos)
@@ -1518,6 +1876,7 @@ function string GetNetPort()             { return Len(class'OLNetworkConfig'.def
 function string GetNetUsername()         { return Len(class'OLNetworkConfig'.default.Username)  > 0 ? class'OLNetworkConfig'.default.Username  : "Player"; }
 function string GetNetRoomCode()         { return class'OLNetworkConfig'.default.RoomCode; }
 function string GetNetPassword()         { return class'OLNetworkConfig'.default.Password; }
+function string GetNetHostSteamID()      { return class'OLNetworkConfig'.default.HostSteamID; }
 function bool   GetNetSyncInteractable() { return class'OLNetworkConfig'.default.SyncInteractable; }
 function bool   GetNetSyncEnemies()      { return class'OLNetworkConfig'.default.SyncEnemies; }
 function bool   GetNetSyncMatinees()     { return class'OLNetworkConfig'.default.SyncMatinees; }
@@ -1527,6 +1886,12 @@ function bool   GetNetSyncPickups()      { return class'OLNetworkConfig'.default
 native function string NativeBuildInviteLink(string IP, string Port, string Room, string Pass);
 // Parses openol://ip:port?room=CODE[&password=SECRET]; returns false if not a valid link
 native function bool NativeParseInviteLink(string Link, out string OutIP, out string OutPort, out string OutRoom, out string OutPass);
+// Connect to a host via Steam P2P tunnel (FP2PBridge client mode).
+native function NativeConnectP2P(string HostSteamID, int RelayPort, string RoomCode, string Password);
+// Returns the local user's 64-bit SteamID as a string, or "" if not available.
+native function string NativeGetMySteamID();
+// Opens the Steam overlay to the friends list (so the user can invite via Steam UI).
+native function NativeOpenSteamFriendsOverlay();
 
 event OnLevelBecameVisible(string PackageName) {}
 

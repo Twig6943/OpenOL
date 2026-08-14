@@ -1,11 +1,27 @@
 /*=============================================================================
     MultiplayerLink.cpp — FMpConnection: persistent UDP connection singleton.
 =============================================================================*/
+// winsock2.h first — P2PBridge.h requires it.
+#ifdef _WIN32
+#  ifndef _WINDOWS_
+#    define WIN32_LEAN_AND_MEAN
+#    ifndef NOMINMAX
+#      define NOMINMAX
+#    endif
+#    include <winsock2.h>
+#  endif
+#endif
+#ifndef _WINSOCK2API_
+#  define _WINSOCK2API_
+#endif
+
 #include "Multiplayer.h"
 #include "HeroChannelPackets.h"
 #include "ServerPackets.h"
 #include "WorldChannelPackets.h"
 #include "UnSocket.h"
+#include "..\..\OnlineSubsystemSteamworks\Inc\OnlineSubsystemSteamworks.h"
+#include "RelayThread.h"    // GRelayThread (for port) + P2PBridge.h (via RelayThread.h)
 
 #if WITH_UE3_NETWORKING
 
@@ -16,7 +32,7 @@ IMPLEMENT_CLASS(AMultiplayerLink);
 // ---------------------------------------------------------------------------
 
 FMpConnection        GMpConn;
-static FMpConnectionTicker* GMpTicker = NULL;
+FMpConnectionTicker* GMpTicker = NULL;
 
 // Global pointers — set each map load by AMultiplayerController::NativeInit.
 AMultiplayerController* GMultiplayerController = NULL;
@@ -62,7 +78,7 @@ void FMpConnection::LoadConfig()
     if (IP.IsEmpty())       IP       = TEXT("127.0.0.1");
     if (UdpPort.IsEmpty())  UdpPort  = TEXT("7777");
     if (Username.IsEmpty()) Username = TEXT("Player");
-    if (RoomCode.IsEmpty()) RoomCode = TEXT("PUBLIC");
+    if (RoomCode.IsEmpty()) RoomCode = TEXT("DEFAULT");
 
 
 }
@@ -78,7 +94,10 @@ void FMpConnection::Connect()
     FString OldRoomCode = RoomCode;
     FString OldPassword = Password;
 
-    LoadConfig();
+    // In P2P mode the caller already set IP/UdpPort/RoomCode/Password —
+    // skip LoadConfig() so it doesn't overwrite them from the ini file.
+    if (!bP2PMode)
+        LoadConfig();
 
     // If connection params changed, drop the existing connection and re-resolve.
     if (bResolved && (IP != OldIP || UdpPort != OldUdpPort || RoomCode != OldRoomCode || Password != OldPassword))
@@ -133,6 +152,7 @@ void FMpConnection::Disconnect()
 
     bIsConnected  = FALSE;
     bIsHandshaked = FALSE;
+    bP2PMode      = FALSE;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +394,77 @@ void FMpConnection::Tick(FLOAT DeltaTime)
                 GMultiplayerController->OnDisconnected();
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// FMpConnection::ConnectP2P — connect via Steam P2P loopback bridge.
+//
+// Starts GP2PBridge in CLIENT mode: it listens on 127.0.0.1:(RelayPort+1)
+// and tunnels all traffic to/from HostSteamID over Steam P2P.
+// FMpConnection is pointed at that loopback port and proceeds normally.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// GMpConn_ConnectP2P — thin wrapper callable from OLGame without Multiplayer headers
+// ---------------------------------------------------------------------------
+
+void GMpConn_ConnectP2P(QWORD HostSteamID, WORD RelayPort,
+    const FString& RoomCode, const FString& Password)
+{
+    GMpConn.ConnectP2P(HostSteamID, RelayPort, RoomCode, Password);
+}
+
+void FMpConnection::ConnectP2P(QWORD InHostSteamID, WORD InRelayPort,
+    const FString& InRoomCode, const FString& InPassword)
+{
+    bP2PMode    = TRUE;
+    HostSteamID = InHostSteamID;
+    RoomCode    = InRoomCode;
+    Password    = InPassword;
+
+    debugf(NAME_Log, TEXT("[P2P] ConnectP2P host=%llu port=%d room=%s"),
+        (unsigned long long)InHostSteamID, (int)InRelayPort, *InRoomCode);
+
+    // Self-connect fallback: if the host SteamID is our own, connect directly
+    // to the local relay over UDP (Steam P2P doesn't deliver packets to self).
+    UBOOL bSelf = FALSE;
+    if (GSteamUser)
+    {
+        QWORD MySteamID = GSteamUser->GetSteamID().ConvertToUint64();
+        bSelf = (MySteamID == InHostSteamID);
+    }
+
+    if (bSelf)
+    {
+        // Direct loopback to the embedded relay — no P2P bridge needed.
+        debugf(NAME_Log, TEXT("[P2P] self-connect -> 127.0.0.1:%d"), (int)InRelayPort);
+        IP      = TEXT("127.0.0.1");
+        UdpPort = FString::Printf(TEXT("%d"), (int)InRelayPort);
+    }
+    else
+    {
+        if (GP2PBridgeClient.IsRunning())
+            GP2PBridgeClient.StopBridge();
+
+        // Start the client bridge (separate from the server bridge GP2PBridge).
+        UBOOL bOk = GP2PBridgeClient.StartClient(InRelayPort, InHostSteamID);
+        debugf(NAME_Log, TEXT("[P2P] StartClient port=%d result=%d"), (int)InRelayPort, (int)bOk);
+
+        // Point FMpConnection at the bridge's loopback listen port.
+        WORD ListenPort = GP2PBridgeClient.GetClientListenPort();
+        debugf(NAME_Log, TEXT("[P2P] FMpConnection -> 127.0.0.1:%d"), (int)ListenPort);
+        IP      = TEXT("127.0.0.1");
+        UdpPort = FString::Printf(TEXT("%d"), (int)ListenPort);
+    }
+
+    // Reset and reconnect.
+    bResolved    = FALSE;
+    bIsConnected = FALSE;
+    HelloAttempt = 0;
+    HelloTimer   = 0.f;
+    if (GResolveInfo) { delete GResolveInfo; GResolveInfo = NULL; }
+
+    Connect();
 }
 
 #endif // WITH_UE3_NETWORKING

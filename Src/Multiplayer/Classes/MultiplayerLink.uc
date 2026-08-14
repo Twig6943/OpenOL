@@ -6,6 +6,7 @@ class MultiplayerLink extends UdpLink
 // Called by OLNetworkConfig.Save to push updated settings into the live FMpConnection singleton.
 native static function NativeReloadConfig();
 
+
 DefaultProperties
 {
 }

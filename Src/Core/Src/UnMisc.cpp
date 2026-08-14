@@ -5448,6 +5448,12 @@ void appInit( const TCHAR* InCmdLine, FOutputDevice* InLog, FOutputDeviceConsole
 		GLogConsole->Show( TRUE );
 	}
 
+	// If -stdout is passed, write log directly to stdout (useful under Wine/terminal).
+	if( ParseParam(appCmdLine(), TEXT("STDOUT")) )
+	{
+		GLog->AddOutputDevice( new FOutputDeviceStdout() );
+	}
+
 #if !CONSOLE && WITH_EDITOR
 	// If specified, Lightmass has to be launched manually with -debug (e.g. through a debugger).
 	// This creates a job with a hard-coded GUID, and allows Lightmass to be executed multiple times (even stand-alone).
