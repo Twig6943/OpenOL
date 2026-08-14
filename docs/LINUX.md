@@ -12,14 +12,16 @@ Install these winetricks packages
 winetricks -q dotnet20 dotnet40 gdiplus corefonts riched20 atmlib msxml3 msls31
 ```
 
-Run ` sudo pkill -9 -f "\\.exe" ` if visual studio asks for some sort of restart.
+Run `vs_professional.exe`
 
 Pick only;
 - Microsoft Foundation Classes for C++
 
+Run ` sudo pkill -9 -f "\\.exe" ` if visual studio asks for some sort of restart.
+
 ### 2. Install DirectX SDK
 
-This one is straight forward just run the installer in the same prefix.
+Run `DXSDK_Jun10.exe`
 
 ### 3. Building
 Cd into `$OUTLASTSRC/Development/Src/Targets` and run `build_wine.sh`
