@@ -1,0 +1,43 @@
+name: Build Mod
+
+# Make sure to define $OUTLASTSRC secret
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman wget
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download OutlastSrc
+        run: wget "${{ secrets.OUTLASTSRC }}"
+
+      - name: Build container image
+        # Gpu somewhat needed
+        run: podman build --device /dev/dri -t openol -f CI/Containerfile .
+
+      - name: Extract binaries from image
+        run: |
+          id=$(podman create localhost/openol)
+          podman cp "$id":/build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Binaries/Win64/OLGame.exe ./OLGame.exe
+          podman cp "$id":/build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Tools/OutlastLauncher/Release/OutlastLauncher.exe ./OutlastLauncher.exe
+
+          podman rm "$id"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenOL
+          path: |
+            OLGame.exe
+            OutlastLauncher.exe
+          archive: false

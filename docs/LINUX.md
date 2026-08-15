@@ -17,28 +17,37 @@ Run `vs_professional.exe`
 Pick only;
 - Microsoft Foundation Classes for C++
 
-Run ` sudo pkill -9 -f "\\.exe" ` if visual studio asks for some sort of restart.
+Run `sudo pkill -9 -f "\\.exe"` if visual studio asks for some sort of restart.
 
 ### 2. Install DirectX SDK
-
 Run `DXSDK_Jun10.exe`
 
 ### 3. Building
 Cd into `$OUTLASTSRC/Development/Src/Targets` and run `build_wine.sh`
 
-// Troubleshooting (WIP ERROR FIX)
+# Troubleshooting
+Shader error
 
 ```log
-Log: PsyX GPU Support: Disabled
-Log: [FSocketWin::Bind] Binding to 0.0.0.0:9989
 Warning, 0 Shader compiler errors compiling global for platform pc-d3d-sm3:
 Critical: appError called: Failed to compile global shader TFilterPixelShader<16>
-Critical: Windows GetLastError: Success. (0)
-Log: === Critical error: ===
 Failed to compile global shader TFilterPixelShader<16>
-
-Address 0xff32d977 (filename not found) [in C:\windows\system32\kernelbase.dll]
 ```
 
-winetricks -q d3dcompiler_**
-winetricks -q dotnet45 mdx d3d9x d3dcompiler_43 win10
+Solution:
+
+```sh
+winetricks -q d3dcompiler_43
+Use this command for it instead of the script "wine ../../../Binaries/Win64/OLGame.exe CookPackages -platform=PCConsole -multilanguagecook=INT -VERBOSE"
+Maybe Set "Engine/Config/BaseEngine.ini" bAllowMultiThreadedShaderCompile=False
+Maybe Delete OLGame/Content/GlobalShaderCache-PC-D3D-SM3.bin
+```
+
+Fatal error of some sort = compile everything from scratch like in [BUILD.md](./BUILD.md)
+```log
+OLGame - Release
+Analyzing...
+
+Fatal error!
+Address = 0xfa041470 (filename not found)
+```
