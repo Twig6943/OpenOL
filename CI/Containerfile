@@ -12,6 +12,7 @@ ENV XDG_RUNTIME_DIR=/build/xdg
 #ENV WLR_RENDERER=pixman # DO NOT UNCOMMENT THIS UNLESS YOU HAVE TO
 
 # Install dependencies
+RUN dpkg --add-architecture i386
 RUN apt-get update && apt-get install -y \
     sudo \
     curl \
