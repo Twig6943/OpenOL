@@ -37,6 +37,8 @@ make
 
 -make
 
+-nosteam
+
 -log
 
 -forcedebuginfo
@@ -49,8 +51,18 @@ make
 
 -VERBOSE
 
+# Containerfile (Experimental)
+
+Place `Outlast1.7z` to the root of this repository, then run this;
+
+```sh
+podman build --device /dev/dri -t openol -f CI/Containerfile .
+```
+
+Keep in mind this is might not work as I don't have a vps with enough storage to test it.
+
 # Disclaimer about the CI
 
-It won't work on free runners simply because of the fact that game's source code is over 20+ gigabytes. You must use a premium runner or a self-hosted one.
+Define the link to `$OUTLASTSRC` as a secret. It won't work on free runners simply because of the fact that game's source code is over 20+ gigabytes. You must use a premium runner or a self-hosted one.
 
 See [LINUX.md](./LINUX.md) & [the workflows](../.github/workflows) for more details.

@@ -26,7 +26,7 @@ Run `DXSDK_Jun10.exe`
 Cd into `$OUTLASTSRC/Development/Src/Targets` and run `build_wine.sh`
 
 # Troubleshooting
-Shader error
+Shader error;
 
 ```log
 Warning, 0 Shader compiler errors compiling global for platform pc-d3d-sm3:
@@ -36,14 +36,15 @@ Failed to compile global shader TFilterPixelShader<16>
 
 Solution:
 
-```sh
 winetricks -q d3dcompiler_43
-Use this command for it instead of the script "wine ../../../Binaries/Win64/OLGame.exe CookPackages -platform=PCConsole -multilanguagecook=INT -VERBOSE"
-Maybe Set "Engine/Config/BaseEngine.ini" bAllowMultiThreadedShaderCompile=False
-Maybe Delete OLGame/Content/GlobalShaderCache-PC-D3D-SM3.bin
-```
 
-Fatal error of some sort = compile everything from scratch like in [BUILD.md](./BUILD.md)
+Use this command for it instead of the script "wine ../../../Binaries/Win64/OLGame.exe CookPackages -platform=PCConsole -multilanguagecook=INT -VERBOSE"
+
+Maybe Set "Engine/Config/BaseEngine.ini" bAllowMultiThreadedShaderCompile=False
+
+Maybe Delete OLGame/Content/GlobalShaderCache-PC-D3D-SM3.bin
+
+Fatal error of some sort;
 ```log
 OLGame - Release
 Analyzing...
@@ -51,3 +52,6 @@ Analyzing...
 Fatal error!
 Address = 0xfa041470 (filename not found)
 ```
+
+Solution:
+Compile everything from scratch like in [BUILD.md](./BUILD.md)
