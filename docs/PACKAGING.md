@@ -1,6 +1,6 @@
 # Packaging
 
-If you wish to ship a release zip like we do that users can just drag and drop to their game files, you'll need to include the configs from [docs/OLGame/Config](./OLGame/Config) . These aren't in the main OLGame folder they're only needed by the game client user downloads from their platform (steam/gog) . After you're done running tests on a regular game client just run [publish.sh](../publish.sh) which should give you a ready-to-ship `OpenOL.7z` file
+If you wish to ship a release zip like we do that users can just drag and drop to their game files, just run [publish.sh](../Development/Src/Targets/publish.sh) which should give you a ready-to-ship `OpenOL.7z` file in that's located in `$OUTLASTSRC/PublishTemp` . Users might need to start their game with `-log -nosteam -seekfreeloadingpcconsole` after installing `OpenOL.7z` .
 
 Here's a file tree of a 7z file we ship for reference;
 

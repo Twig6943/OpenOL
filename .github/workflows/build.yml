@@ -28,9 +28,7 @@ jobs:
       - name: Extract binaries from image
         run: |
           id=$(podman create localhost/openol)
-          podman cp "$id":/build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Binaries/Win64/OLGame.exe ./OLGame.exe
-          podman cp "$id":/build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Tools/OutlastLauncher/Release/OutlastLauncher.exe ./OutlastLauncher.exe
-
+          podman cp "$id":/build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/PublishTemp/OpenOL.7z ./OpenOL.7z
           podman rm "$id"
 
       - name: Upload artifacts
@@ -38,6 +36,5 @@ jobs:
         with:
           name: OpenOL
           path: |
-            OLGame.exe
-            OutlastLauncher.exe
+            OpenOL.7z
           archive: false
