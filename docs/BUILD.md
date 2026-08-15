@@ -14,31 +14,43 @@
 │    ├── Src/         8.6 GB
 │    └── Tools/       350 MB
 ├─── Engine/          300 MB
-└─── OLGame/
-     ├── Config/      1 MB
-     └── Content/     23 GB
+└─── OLGame/          22.6 GB
 ```
 
-Copy `Src` & `Tools` in the root of this repository to `$OUTLASTSRC/Development` and press replace when asked.
+Copy `Development` , `OLGame` in the root of this repository to `$OUTLASTSRC/Development` and press replace when asked.
 
-### Compiling UnrealBuildTool
+### 1.Build UnrealBuildTool
 
-### Compiling UnrealScript
+Rebuild this before building UnrealScript as it's needed sometimes
 
-### Compiling binaries
+### 2. Build openol-relay
+
+### 3. Build binaries (OLGame, OutlastLauncher)
+
+### 4.Build UnrealScript & Cook Packages
+
+If you get weird errors/crashes when building UnrealScript make sure to build the game's .exe/C++ part cleanly first.
 
 # Launch options
 
 make
+
 -make
+
 -log
+
 -forcedebuginfo
+
 -silent
+
 -seekfreeloading
+
 -seekfreeloadingpcconsole
+
+-VERBOSE
 
 # Disclaimer about the CI
 
-It won't work on github free runner simply because of the fact that game's source code is over 14 gigabytes which is what free runners offer. You must use a premium runner or a self-hosted one.
+It won't work on free runners simply because of the fact that game's source code is over 20+ gigabytes. You must use a premium runner or a self-hosted one.
 
 See [LINUX.md](./LINUX.md) & [the workflows](../.github/workflows) for more details.
