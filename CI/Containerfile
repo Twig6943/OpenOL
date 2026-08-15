@@ -104,7 +104,9 @@ RUN mkdir -p $WINEPREFIX $XDG_RUNTIME_DIR && \
 
 RUN wlheadless-run -c cage -- winetricks -q dotnet20 dotnet40 gdiplus corefonts riched20 atmlib msxml3 msls31
 
-RUN 7z x /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/en_visual_studio_professional_2012_x86_dvd_2262334.iso -o./build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/
+RUN 7z x \
+    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/en_visual_studio_professional_2012_x86_dvd_2262334.iso \
+    -o/build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/
 
 COPY --chown=builder:builder CI/AdminDeployment.xml /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/
 
@@ -112,13 +114,14 @@ RUN wlheadless-run -c cage -- wine vs_professional.exe /AdminFile AdminDeploymen
 
 RUN wlheadless-run -c cage -- wine DXSDK_Jun10.exe /U
 
-RUN chmod +x /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/*.sh \
-    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 1
-    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 2
-    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 3
-    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 5
-    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 6
-    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 8
-    /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/publish.sh
+RUN chmod +x /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/*.sh
+
+RUN /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 1 \
+    && /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 2 \
+    && /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 3 \
+    && /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 5 \
+    && /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 6 \
+    && /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/build_wine.sh 8 \
+    && /build/DATA/D/Perforce_Server1/outlast/UnrealEngine3/Development/Src/Targets/publish.sh
 
 CMD ["/bin/bash"]
